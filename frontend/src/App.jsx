@@ -8,6 +8,7 @@ import PatientDashboard from "./pages/PatientDashboard";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import PrescriptionVerify from "./pages/PrescriptionVerify";
+import OtpVerification from "./pages/OtpVerification";
 import "./App.css";
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
         <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
         <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/verify-prescription" element={<PrescriptionVerify />} />
+        <Route path="/otp-verification" element={<OtpVerification />} />
       </Routes>
     </main>
   );
