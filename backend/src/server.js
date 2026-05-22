@@ -1,13 +1,20 @@
-const express = require("express");
-const cors = require("cors");
-const cookieParser = require("cookie-parser");
-require("dotenv").config();
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+import connectDB from "./config/db.js";
+
+dotenv.config();
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
+// Connect MongoDB
+connectDB();
+
+// Middlewares
 app.use(
   cors({
     origin: CLIENT_URL,
@@ -19,10 +26,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Root route
 app.get("/", (req, res) => {
   res.send("MediLink Backend API is running");
 });
 
+// Health check route
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
@@ -30,6 +39,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// 404 route
 app.use((req, res) => {
   res.status(404).json({
     success: false,
