@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+// Check if user is logged in
 export const protect = async (req, res, next) => {
   try {
     let token;
@@ -50,4 +51,25 @@ export const protect = async (req, res, next) => {
       error: error.message,
     });
   }
+};
+
+// Check user role
+export const authorizeRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "User information not found. Please login again.",
+      });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Required role: ${allowedRoles.join(", ")}`,
+      });
+    }
+
+    next();
+  };
 };
