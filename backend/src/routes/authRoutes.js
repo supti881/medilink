@@ -4,6 +4,7 @@ import {
   loginUser,
   logoutUser,
   registerUser,
+  verifyOtp,
 } from "../controllers/authController.js";
 import { authorizeRoles, protect } from "../middlewares/authMiddleware.js";
 
@@ -12,6 +13,8 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/logout", logoutUser);
+router.post("/verify-otp", verifyOtp);
+
 router.get("/me", protect, getCurrentUser);
 
 // Test protected role route

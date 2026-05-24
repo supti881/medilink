@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { generateOtp, getOtpExpiry } from "../utils/otp.js";
 
 const createToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
@@ -28,17 +29,24 @@ export const registerUser = async (req, res) => {
       });
     }
 
+    const otp = generateOtp();
+    const otpExpiresAt = getOtpExpiry();
+
     const user = await User.create({
       name,
       email,
       password,
       phone,
       role: role || "patient",
+      otp,
+      otpExpiresAt,
+      isVerified: false,
     });
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: "User registered successfully. OTP generated for verification.",
+      devOtp: otp,
       user: {
         id: user._id,
         name: user.name,
@@ -134,6 +142,82 @@ export const loginUser = async (req, res) => {
   }
 };
 
+// Verify OTP
+export const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
+
+    const user = await User.findOne({ email }).select("+otp +otpExpiresAt");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "Account is already verified",
+      });
+    }
+
+    if (!user.otp || !user.otpExpiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: "No OTP found. Please request a new OTP.",
+      });
+    }
+
+    if (user.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    if (user.otpExpiresAt < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP has expired",
+      });
+    }
+
+    user.isVerified = true;
+    user.otp = undefined;
+    user.otpExpiresAt = undefined;
+
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json({
+      success: true,
+      message: "Account verified successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isVerified: user.isVerified,
+        status: user.status,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "OTP verification failed",
+      error: error.message,
+    });
+  }
+};
+
 // Get current logged-in user
 export const getCurrentUser = async (req, res) => {
   try {
@@ -159,6 +243,7 @@ export const getCurrentUser = async (req, res) => {
     });
   }
 };
+
 // Logout user
 export const logoutUser = async (req, res) => {
   try {
