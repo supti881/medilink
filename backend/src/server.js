@@ -10,6 +10,7 @@ import appointmentRoutes from "./routes/appointmentRoutes.js";
 import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import supportTicketRoutes from "./routes/supportTicketRoutes.js";
+import replacementRequestRoutes from "./routes/replacementRequestRoutes.js";
 
 dotenv.config();
 
@@ -53,6 +54,7 @@ app.use("/api/appointments", appointmentRoutes);
 app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/support-tickets", supportTicketRoutes);
+app.use("/api/replacement-requests", replacementRequestRoutes);
 
 // 404 route
 app.use((req, res) => {
