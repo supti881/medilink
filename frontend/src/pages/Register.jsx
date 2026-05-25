@@ -1,135 +1,292 @@
+import { useState } from "react";
+import { Link } from "react-router";
 import {
-  ArrowRight,
-  CheckCircle2,
-  FileText,
+  User,
   Mail,
-  MapPin,
+  Lock,
   Phone,
+  Loader2,
   ShieldCheck,
-  UploadCloud,
   UserRound,
 } from "lucide-react";
-
-const checklist = [
-  "Patient profile creation",
-  "OTP email verification",
-  "Clinical document upload",
-  "Consultation application access",
-];
+import { authApi } from "../services/api";
 
 function Register() {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    role: "patient",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [devOtp, setDevOtp] = useState("");
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previousData) => ({
+      ...previousData,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setError("");
+    setSuccess("");
+    setDevOtp("");
+
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.password ||
+      !formData.phone ||
+      !formData.role
+    ) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await authApi.register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        role: formData.role,
+      });
+
+      localStorage.setItem("medilink_pending_email", formData.email);
+
+      setSuccess(
+        response.message ||
+          "Account created successfully. Please verify your OTP."
+      );
+
+      if (response.devOtp) {
+        setDevOtp(response.devOtp);
+      }
+
+      setFormData({
+        name: "",
+        email: "",
+        password: "",
+        phone: "",
+        role: "patient",
+      });
+    } catch (err) {
+      setError(err.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <section className="mx-auto grid max-w-7xl gap-8 px-6 py-12 lg:grid-cols-[0.8fr_1.2fr]">
-      <div className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-xl shadow-slate-200">
-        <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-teal-200">
-          <ShieldCheck className="h-4 w-4" />
-          Patient Onboarding
-        </div>
+    <main className="min-h-screen bg-slate-950 text-white">
+      <section className="mx-auto grid min-h-screen max-w-7xl grid-cols-1 lg:grid-cols-2">
+        <div className="flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-16">
+          <Link
+            to="/"
+            className="mb-10 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-200"
+          >
+            <ShieldCheck size={18} />
+            MediLink Secure Registration
+          </Link>
 
-        <h2 className="mt-6 text-4xl font-black leading-tight tracking-tight md:text-5xl">
-          Create your MediLink patient account.
-        </h2>
+          <div className="max-w-xl">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-emerald-300">
+              Create account
+            </p>
 
-        <p className="mt-5 leading-8 text-slate-300">
-          Register once, verify your email with OTP, upload required medical
-          records, and access the full consultation workflow.
-        </p>
+            <h1 className="text-4xl font-bold leading-tight sm:text-5xl">
+              Start your digital healthcare journey with MediLink.
+            </h1>
 
-        <div className="mt-8 space-y-4">
-          {checklist.map((item) => (
-            <div key={item} className="flex items-center gap-3 rounded-2xl bg-white/10 p-4">
-              <CheckCircle2 className="h-5 w-5 text-teal-300" />
-              <p className="font-bold text-slate-100">{item}</p>
+            <p className="mt-5 text-base leading-7 text-slate-300">
+              Register as a patient or doctor, verify your account with OTP, and
+              access appointments, prescriptions, support, and replacement
+              services.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+              <UserRound className="mb-4 text-emerald-300" size={28} />
+              <h3 className="text-lg font-bold">Patient Account</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Book appointments, view prescriptions, make demo payments, and
+                submit replacement requests.
+              </p>
             </div>
-          ))}
-        </div>
 
-        <div className="mt-8 rounded-3xl bg-teal-500 p-5">
-          <p className="text-sm font-bold text-teal-50">Next verification step</p>
-          <p className="mt-2 text-2xl font-black">Email OTP Confirmation</p>
-        </div>
-      </div>
-
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-        <div>
-          <h3 className="text-3xl font-black text-slate-950">Patient Registration</h3>
-          <p className="mt-2 text-slate-600">
-            Fill in patient details to start your secure consultation application.
-          </p>
-        </div>
-
-        <div className="mt-8 grid gap-5 md:grid-cols-2">
-          <label>
-            <span className="text-sm font-bold text-slate-700">Full Name</span>
-            <div className="mt-2 flex items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 focus-within:border-teal-500">
-              <UserRound className="h-5 w-5 text-teal-600" />
-              <input className="w-full outline-none" placeholder="Mst. Sharmin Akter" />
-            </div>
-          </label>
-
-          <label>
-            <span className="text-sm font-bold text-slate-700">Email Address</span>
-            <div className="mt-2 flex items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 focus-within:border-teal-500">
-              <Mail className="h-5 w-5 text-teal-600" />
-              <input className="w-full outline-none" placeholder="patient@email.com" />
-            </div>
-          </label>
-
-          <label>
-            <span className="text-sm font-bold text-slate-700">Phone Number</span>
-            <div className="mt-2 flex items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 focus-within:border-teal-500">
-              <Phone className="h-5 w-5 text-teal-600" />
-              <input className="w-full outline-none" placeholder="+8801XXXXXXXXX" />
-            </div>
-          </label>
-
-          <label>
-            <span className="text-sm font-bold text-slate-700">Blood Group</span>
-            <select className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-teal-500">
-              <option>Select blood group</option>
-              <option>A+</option>
-              <option>B+</option>
-              <option>O+</option>
-              <option>AB+</option>
-            </select>
-          </label>
-
-          <label className="md:col-span-2">
-            <span className="text-sm font-bold text-slate-700">Address</span>
-            <div className="mt-2 flex items-center gap-3 rounded-2xl border border-slate-300 px-4 py-3 focus-within:border-teal-500">
-              <MapPin className="h-5 w-5 text-teal-600" />
-              <input className="w-full outline-none" placeholder="Sylhet, Bangladesh" />
-            </div>
-          </label>
-
-          <label className="md:col-span-2">
-            <span className="text-sm font-bold text-slate-700">Health Issue Summary</span>
-            <div className="mt-2 flex items-start gap-3 rounded-2xl border border-slate-300 px-4 py-3 focus-within:border-teal-500">
-              <FileText className="mt-1 h-5 w-5 text-teal-600" />
-              <textarea
-                className="min-h-24 w-full outline-none"
-                placeholder="Describe your primary health problem..."
-              />
-            </div>
-          </label>
-
-          <div className="md:col-span-2 rounded-3xl border border-dashed border-teal-300 bg-teal-50 p-5">
-            <div className="flex items-center gap-3">
-              <UploadCloud className="h-6 w-6 text-teal-700" />
-              <div>
-                <p className="font-black text-slate-950">Upload Medical Documents</p>
-                <p className="text-sm text-slate-600">PDF, JPG, PNG files for doctor review</p>
-              </div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+              <ShieldCheck className="mb-4 text-cyan-300" size={28} />
+              <h3 className="text-lg font-bold">Doctor Account</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                Access appointment queues and create digital prescriptions after
+                admin profile setup.
+              </p>
             </div>
           </div>
         </div>
 
-        <button className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-6 py-4 font-black text-white hover:bg-teal-700">
-          Continue to OTP Verification
-          <ArrowRight className="h-5 w-5" />
-        </button>
-      </div>
-    </section>
+        <div className="flex items-center justify-center px-6 py-12 sm:px-10 lg:px-16">
+          <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-white p-6 text-slate-950 shadow-2xl shadow-emerald-950/30 sm:p-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold">Register</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Create a MediLink account and verify it using OTP.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                {success}
+              </div>
+            )}
+
+            {devOtp && (
+              <div className="mb-5 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+                <p className="font-semibold">Demo OTP:</p>
+                <p className="mt-1 text-2xl font-black tracking-[0.25em]">
+                  {devOtp}
+                </p>
+                <Link
+                  to="/verify-otp"
+                  className="mt-3 inline-block font-bold text-cyan-700"
+                >
+                  Go to OTP verification
+                </Link>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Full name
+                </label>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-emerald-500 focus-within:bg-white">
+                  <User size={20} className="text-slate-400" />
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter full name"
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Email address
+                </label>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-emerald-500 focus-within:bg-white">
+                  <Mail size={20} className="text-slate-400" />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Enter email"
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Phone number
+                </label>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-emerald-500 focus-within:bg-white">
+                  <Phone size={20} className="text-slate-400" />
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="01700000000"
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Password
+                </label>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-emerald-500 focus-within:bg-white">
+                  <Lock size={20} className="text-slate-400" />
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Minimum 6 characters"
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Account type
+                </label>
+
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500 focus:bg-white"
+                >
+                  <option value="patient">Patient</option>
+                  <option value="doctor">Doctor</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading && <Loader2 size={18} className="animate-spin" />}
+                {loading ? "Creating account..." : "Create account"}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-sm text-slate-600">
+              Already have an account?{" "}
+              <Link to="/login" className="font-bold text-emerald-700">
+                Login
+              </Link>
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
 

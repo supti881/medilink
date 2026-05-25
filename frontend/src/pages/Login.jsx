@@ -1,126 +1,206 @@
-import { Link } from "react-router";
-import {
-  ArrowRight,
-  HeartPulse,
-  LockKeyhole,
-  Mail,
-  ShieldCheck,
-  Stethoscope,
-  UserRound,
-} from "lucide-react";
-
-const roles = [
-  { label: "Patient", icon: UserRound },
-  { label: "Doctor", icon: Stethoscope },
-  { label: "Admin", icon: ShieldCheck },
-];
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { Lock, Mail, Loader2, ShieldCheck } from "lucide-react";
+import { authApi } from "../services/api";
 
 function Login() {
-  return (
-    <section className="relative min-h-[calc(100vh-80px)] overflow-hidden px-6 py-12">
-      <div className="absolute left-[-140px] top-[-140px] h-96 w-96 rounded-full bg-teal-200/40 blur-3xl" />
-      <div className="absolute bottom-[-160px] right-[-120px] h-96 w-96 rounded-full bg-cyan-200/50 blur-3xl" />
+  const navigate = useNavigate();
 
-      <div className="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-700 shadow-sm">
-            <ShieldCheck className="h-4 w-4" />
-            Secure Role-Based Access
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previousData) => ({
+      ...previousData,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setError("");
+    setSuccess("");
+
+    if (!formData.email || !formData.password) {
+      setError("Please enter both email and password.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await authApi.login({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      localStorage.setItem("medilink_user", JSON.stringify(response.user));
+
+      setSuccess("Login successful. Redirecting...");
+
+      setTimeout(() => {
+        navigate("/");
+      }, 700);
+    } catch (err) {
+      setError(err.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fillDemoUser = (email) => {
+    setFormData({
+      email,
+      password: "123456",
+    });
+    setError("");
+    setSuccess("");
+  };
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-white">
+      <section className="mx-auto grid min-h-screen max-w-7xl grid-cols-1 lg:grid-cols-2">
+        <div className="flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-16">
+          <Link
+            to="/"
+            className="mb-10 inline-flex w-fit items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-200"
+          >
+            <ShieldCheck size={18} />
+            MediLink Secure Portal
+          </Link>
+
+          <div className="max-w-xl">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">
+              Welcome back
+            </p>
+
+            <h1 className="text-4xl font-bold leading-tight sm:text-5xl">
+              Sign in to manage your healthcare services.
+            </h1>
+
+            <p className="mt-5 text-base leading-7 text-slate-300">
+              Access appointments, prescriptions, payment records, support
+              tickets, and replacement requests from one secure dashboard.
+            </p>
           </div>
 
-          <h2 className="mt-6 text-5xl font-black leading-tight tracking-tight text-slate-950">
-            Sign in to your connected healthcare workspace.
-          </h2>
+          <div className="mt-10 grid gap-3 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => fillDemoUser("sharmin3@example.com")}
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-cyan-300/60 hover:bg-cyan-400/10"
+            >
+              <span className="block font-semibold text-white">Patient</span>
+              sharmin3@example.com
+            </button>
 
-          <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">
-            Patients, doctors, and administrators can access their dedicated MediLink
-            dashboards through a protected authentication flow.
-          </p>
+            <button
+              type="button"
+              onClick={() => fillDemoUser("doctor1@medilink.com")}
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-cyan-300/60 hover:bg-cyan-400/10"
+            >
+              <span className="block font-semibold text-white">Doctor</span>
+              doctor1@medilink.com
+            </button>
 
-          <div className="mt-8 grid max-w-xl gap-4 sm:grid-cols-3">
-            {roles.map((role) => {
-              const Icon = role.icon;
-
-              return (
-                <div key={role.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <p className="mt-4 font-black text-slate-950">{role.label}</p>
-                  <p className="mt-1 text-sm text-slate-500">Portal access</p>
-                </div>
-              );
-            })}
+            <button
+              type="button"
+              onClick={() => fillDemoUser("admin@medilink.com")}
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-cyan-300/60 hover:bg-cyan-400/10"
+            >
+              <span className="block font-semibold text-white">Admin</span>
+              admin@medilink.com
+            </button>
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-200">
-          <div className="rounded-[1.5rem] bg-slate-950 p-8 text-white">
-            <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500">
-                <HeartPulse className="h-8 w-8" />
+        <div className="flex items-center justify-center px-6 py-12 sm:px-10 lg:px-16">
+          <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-white p-6 text-slate-950 shadow-2xl shadow-cyan-950/30 sm:p-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold">Login</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Use your registered MediLink account credentials.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {error}
               </div>
+            )}
+
+            {success && (
+              <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                {success}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <h3 className="text-3xl font-black">Welcome back</h3>
-                <p className="text-slate-300">Login to continue</p>
-              </div>
-            </div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Email address
+                </label>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {roles.map((role) => (
-                <button
-                  key={role.label}
-                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
-                    role.label === "Patient"
-                      ? "bg-teal-500 text-white"
-                      : "bg-white/10 text-slate-200 hover:bg-white/15"
-                  }`}
-                >
-                  {role.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-8 space-y-4">
-              <label className="block">
-                <span className="text-sm font-bold text-slate-200">Email Address</span>
-                <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3">
-                  <Mail className="h-5 w-5 text-teal-300" />
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-cyan-500 focus-within:bg-white">
+                  <Mail size={20} className="text-slate-400" />
                   <input
-                    className="w-full bg-transparent font-medium text-white outline-none placeholder:text-slate-400"
-                    placeholder="patient@medilink.com"
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Enter your email"
+                    className="w-full bg-transparent text-sm outline-none"
                   />
                 </div>
-              </label>
+              </div>
 
-              <label className="block">
-                <span className="text-sm font-bold text-slate-200">Password</span>
-                <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3">
-                  <LockKeyhole className="h-5 w-5 text-teal-300" />
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Password
+                </label>
+
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 focus-within:border-cyan-500 focus-within:bg-white">
+                  <Lock size={20} className="text-slate-400" />
                   <input
                     type="password"
-                    className="w-full bg-transparent font-medium text-white outline-none placeholder:text-slate-400"
-                    placeholder="Enter password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Enter your password"
+                    className="w-full bg-transparent text-sm outline-none"
                   />
                 </div>
-              </label>
+              </div>
 
-              <button className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 px-5 py-4 font-black text-white hover:bg-teal-400">
-                Login Securely
-                <ArrowRight className="h-5 w-5" />
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-cyan-600/20 transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading && <Loader2 size={18} className="animate-spin" />}
+                {loading ? "Signing in..." : "Sign in"}
               </button>
-            </div>
+            </form>
 
-            <p className="mt-6 text-center text-sm text-slate-300">
-              New patient?{" "}
-              <Link to="/register" className="font-black text-teal-300 hover:text-teal-200">
+            <p className="mt-6 text-center text-sm text-slate-600">
+              Do not have an account?{" "}
+              <Link to="/register" className="font-bold text-cyan-700">
                 Create account
               </Link>
             </p>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
   );
 }
 

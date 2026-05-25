@@ -1,260 +1,313 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import {
-  BadgeCheck,
-  CalendarCheck,
-  Clock3,
-  Filter,
-  MapPin,
+  AlertCircle,
+  CalendarDays,
+  Clock,
+  GraduationCap,
+  Loader2,
   Search,
   Star,
   Stethoscope,
+  Wallet,
 } from "lucide-react";
-
-const departments = ["All", "Cardiology", "Medicine", "Dermatology", "Pediatrics", "Neurology"];
-
-const doctors = [
-  {
-    name: "Dr. Ayesha Rahman",
-    specialty: "Cardiology",
-    experience: "8 years",
-    rating: "4.9",
-    location: "Sylhet Medical Center",
-    fee: "৳700",
-    status: "Available Today",
-    slots: ["10:00 AM", "10:30 AM", "11:15 AM"],
-  },
-  {
-    name: "Dr. Tanvir Ahmed",
-    specialty: "Medicine",
-    experience: "10 years",
-    rating: "4.8",
-    location: "MediLink Online Clinic",
-    fee: "৳500",
-    status: "Available Today",
-    slots: ["2:00 PM", "3:00 PM", "4:30 PM"],
-  },
-  {
-    name: "Dr. Nusrat Jahan",
-    specialty: "Dermatology",
-    experience: "6 years",
-    rating: "4.7",
-    location: "Skin Care Chamber",
-    fee: "৳650",
-    status: "Limited Slots",
-    slots: ["6:00 PM", "7:00 PM"],
-  },
-  {
-    name: "Dr. Fahim Chowdhury",
-    specialty: "Pediatrics",
-    experience: "7 years",
-    rating: "4.9",
-    location: "Child Care Unit",
-    fee: "৳550",
-    status: "Available Tomorrow",
-    slots: ["9:30 AM", "12:00 PM", "1:30 PM"],
-  },
-  {
-    name: "Dr. Mahira Islam",
-    specialty: "Neurology",
-    experience: "9 years",
-    rating: "4.8",
-    location: "Neuro Health Desk",
-    fee: "৳900",
-    status: "Available Today",
-    slots: ["5:00 PM", "6:30 PM"],
-  },
-  {
-    name: "Dr. Rafi Hossain",
-    specialty: "Medicine",
-    experience: "5 years",
-    rating: "4.6",
-    location: "MediLink Care Hub",
-    fee: "৳450",
-    status: "Available Today",
-    slots: ["8:00 PM", "8:45 PM", "9:30 PM"],
-  },
-];
+import { doctorApi } from "../services/api";
 
 function Doctors() {
-  const [selectedDepartment, setSelectedDepartment] = useState("All");
+  const [doctors, setDoctors] = useState([]);
+  const [filteredDoctors, setFilteredDoctors] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filteredDoctors = useMemo(() => {
-    return doctors.filter((doctor) => {
-      const matchesDepartment =
-        selectedDepartment === "All" || doctor.specialty === selectedDepartment;
+  const fetchDoctors = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-      const matchesSearch =
-        doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doctor.specialty.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doctor.location.toLowerCase().includes(searchTerm.toLowerCase());
+      const response = await doctorApi.getAll();
 
-      return matchesDepartment && matchesSearch;
-    });
-  }, [selectedDepartment, searchTerm]);
+      const doctorList = response.doctors || [];
+      setDoctors(doctorList);
+      setFilteredDoctors(doctorList);
+    } catch (err) {
+      setError(err.message || "Failed to load doctors.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
+
+  useEffect(() => {
+    let result = [...doctors];
+
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase();
+
+      result = result.filter((doctor) => {
+        return (
+          doctor.fullName?.toLowerCase().includes(search) ||
+          doctor.specialization?.toLowerCase().includes(search) ||
+          doctor.department?.toLowerCase().includes(search) ||
+          doctor.qualification?.toLowerCase().includes(search)
+        );
+      });
+    }
+
+    if (selectedDepartment !== "all") {
+      result = result.filter(
+        (doctor) =>
+          doctor.department?.toLowerCase() === selectedDepartment.toLowerCase()
+      );
+    }
+
+    setFilteredDoctors(result);
+  }, [searchTerm, selectedDepartment, doctors]);
+
+  const departments = [
+    "all",
+    ...new Set(
+      doctors
+        .map((doctor) => doctor.department)
+        .filter((department) => Boolean(department))
+    ),
+  ];
 
   return (
-    <section className="mx-auto max-w-7xl px-6 py-12">
-      <div className="rounded-[2rem] bg-slate-950 px-8 py-10 text-white shadow-xl shadow-slate-200">
-        <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr] lg:items-end">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-teal-200">
-              <Stethoscope className="h-4 w-4" />
-              Specialist Doctor Directory
+    <main className="min-h-screen bg-slate-50">
+      <section className="relative overflow-hidden border-b border-slate-200 bg-slate-950 px-6 py-20 text-white">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute left-10 top-10 h-72 w-72 rounded-full bg-cyan-500 blur-3xl" />
+          <div className="absolute bottom-0 right-10 h-72 w-72 rounded-full bg-emerald-500 blur-3xl" />
+        </div>
+
+        <div className="relative mx-auto max-w-7xl">
+          <p className="mb-4 text-sm font-bold uppercase tracking-[0.35em] text-cyan-300">
+            MediLink Doctor Directory
+          </p>
+
+          <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+            <div>
+              <h1 className="max-w-4xl text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">
+                Find verified doctors and book care faster.
+              </h1>
+
+              <p className="mt-6 max-w-2xl text-base leading-8 text-slate-300">
+                Browse doctor profiles from the database, review specialization,
+                consultation fee, experience, and available schedule before
+                booking an appointment.
+              </p>
             </div>
 
-            <h2 className="mt-5 text-4xl font-black tracking-tight md:text-5xl">
-              Find the right doctor and book a consultation slot.
-            </h2>
+            <div className="rounded-[2rem] border border-white/10 bg-white/10 p-6 backdrop-blur">
+              <div className="flex items-center gap-4">
+                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-cyan-400 text-slate-950">
+                  <Stethoscope size={28} />
+                </div>
 
-            <p className="mt-4 max-w-2xl leading-8 text-slate-300">
-              Search doctors by department, review availability, compare consultation fees,
-              and select a suitable appointment time.
+                <div>
+                  <p className="text-3xl font-black">{doctors.length}</p>
+                  <p className="text-sm text-slate-300">Doctors available</p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <p className="font-bold text-cyan-200">Live API</p>
+                  <p className="mt-1 text-slate-300">MongoDB connected</p>
+                </div>
+
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <p className="font-bold text-emerald-200">Verified</p>
+                  <p className="mt-1 text-slate-300">Doctor profiles</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 py-10">
+        <div className="mb-8 grid gap-4 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_260px]">
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <Search size={20} className="text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by doctor name, department, or specialization"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="w-full bg-transparent text-sm outline-none"
+            />
+          </div>
+
+          <select
+            value={selectedDepartment}
+            onChange={(event) => setSelectedDepartment(event.target.value)}
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none"
+          >
+            {departments.map((department) => (
+              <option key={department} value={department}>
+                {department === "all" ? "All departments" : department}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {loading && (
+          <div className="grid min-h-[280px] place-items-center rounded-[2rem] border border-slate-200 bg-white">
+            <div className="text-center">
+              <Loader2 className="mx-auto animate-spin text-cyan-600" size={42} />
+              <p className="mt-4 font-semibold text-slate-700">
+                Loading doctors from backend...
+              </p>
+            </div>
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="rounded-[2rem] border border-red-200 bg-red-50 p-6 text-red-700">
+            <div className="flex items-center gap-3">
+              <AlertCircle size={24} />
+              <p className="font-bold">{error}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchDoctors}
+              className="mt-5 rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && filteredDoctors.length === 0 && (
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-10 text-center">
+            <p className="text-2xl font-black text-slate-900">
+              No doctors found
+            </p>
+            <p className="mt-2 text-slate-600">
+              Try another search keyword or department.
             </p>
           </div>
+        )}
 
-          <div className="rounded-3xl bg-white/10 p-5">
-            <p className="text-sm font-semibold text-slate-300">Today&apos;s availability</p>
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-3xl font-black">24</p>
-                <p className="text-xs text-slate-300">Doctors</p>
-              </div>
-              <div>
-                <p className="text-3xl font-black">72</p>
-                <p className="text-xs text-slate-300">Slots</p>
-              </div>
-              <div>
-                <p className="text-3xl font-black">12</p>
-                <p className="text-xs text-slate-300">Online</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+        {!loading && !error && filteredDoctors.length > 0 && (
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {filteredDoctors.map((doctor) => (
+              <article
+                key={doctor._id}
+                className="group overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+              >
+                <div className="relative bg-slate-950 p-6 text-white">
+                  <div className="absolute inset-0 opacity-30">
+                    <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-cyan-400 blur-3xl" />
+                  </div>
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-          <input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-4 font-medium shadow-sm outline-none focus:border-teal-500"
-            placeholder="Search by doctor, specialty, or chamber..."
-          />
-        </div>
+                  <div className="relative flex items-start gap-4">
+                    <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-cyan-400 text-2xl font-black text-slate-950">
+                      {doctor.fullName?.charAt(0) || "D"}
+                    </div>
 
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <Filter className="h-5 w-5 text-teal-600" />
-          <span className="text-sm font-bold text-slate-700">Filter doctors</span>
-        </div>
-      </div>
+                    <div>
+                      <h2 className="text-xl font-black">
+                        {doctor.fullName || "Doctor"}
+                      </h2>
+                      <p className="mt-1 text-sm font-semibold text-cyan-200">
+                        {doctor.specialization || "Specialist"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-300">
+                        {doctor.department || "Medical Department"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        {departments.map((department) => (
-          <button
-            key={department}
-            onClick={() => setSelectedDepartment(department)}
-            className={`rounded-full px-5 py-2.5 text-sm font-bold transition ${
-              selectedDepartment === department
-                ? "bg-teal-600 text-white shadow-lg shadow-teal-600/20"
-                : "border border-slate-200 bg-white text-slate-600 hover:border-teal-400 hover:text-teal-700"
-            }`}
-          >
-            {department}
-          </button>
-        ))}
-      </div>
+                <div className="space-y-5 p-6">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <GraduationCap size={20} className="text-cyan-600" />
+                      <p className="mt-2 text-xs text-slate-500">
+                        Qualification
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">
+                        {doctor.qualification || "N/A"}
+                      </p>
+                    </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        {filteredDoctors.map((doctor) => (
-          <article
-            key={doctor.name}
-            className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200"
-          >
-            <div className="flex flex-col gap-5 sm:flex-row">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-teal-500 to-cyan-600 text-2xl font-black text-white shadow-lg shadow-teal-500/20">
-                {doctor.name
-                  .replace("Dr. ", "")
-                  .split(" ")
-                  .map((part) => part[0])
-                  .join("")
-                  .slice(0, 2)}
-              </div>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <Wallet size={20} className="text-emerald-600" />
+                      <p className="mt-2 text-xs text-slate-500">Fee</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">
+                        ৳{doctor.consultationFee || 0}
+                      </p>
+                    </div>
+                  </div>
 
-              <div className="flex-1">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-center justify-between rounded-2xl border border-slate-100 p-4">
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <CalendarDays size={18} className="text-cyan-600" />
+                      <span>{doctor.experienceYears || 0}+ years experience</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-sm font-bold text-amber-500">
+                      <Star size={17} fill="currentColor" />
+                      {doctor.rating || 0}
+                    </div>
+                  </div>
+
+                  <p className="min-h-[72px] text-sm leading-6 text-slate-600">
+                    {doctor.bio ||
+                      "Experienced healthcare professional available for MediLink consultations."}
+                  </p>
+
                   <div>
-                    <h3 className="text-2xl font-black text-slate-950">{doctor.name}</h3>
-                    <p className="mt-1 font-semibold text-teal-700">{doctor.specialty}</p>
+                    <p className="mb-3 text-sm font-black text-slate-900">
+                      Available slots
+                    </p>
+
+                    <div className="space-y-2">
+                      {doctor.availableSlots?.length > 0 ? (
+                        doctor.availableSlots.map((slot, index) => (
+                          <div
+                            key={`${slot.day}-${index}`}
+                            className="flex items-center justify-between rounded-2xl bg-cyan-50 px-4 py-3 text-sm"
+                          >
+                            <span className="font-bold text-cyan-900">
+                              {slot.day}
+                            </span>
+
+                            <span className="flex items-center gap-2 text-cyan-700">
+                              <Clock size={15} />
+                              {slot.startTime} - {slot.endTime}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                          No active schedule found.
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700">
-                    <BadgeCheck className="h-4 w-4" />
-                    Verified
-                  </span>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                    <Clock3 className="h-4 w-4 text-teal-600" />
-                    {doctor.experience} experience
-                  </div>
-
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    {doctor.rating} patient rating
-                  </div>
-
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-600 sm:col-span-2">
-                    <MapPin className="h-4 w-4 text-teal-600" />
-                    {doctor.location}
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-3">
-                  <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700">
-                    Fee: {doctor.fee}
-                  </span>
-                  <span className="rounded-full bg-cyan-50 px-4 py-2 text-sm font-bold text-cyan-700">
-                    {doctor.status}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 rounded-3xl bg-slate-50 p-5">
-              <div className="flex items-center gap-2">
-                <CalendarCheck className="h-5 w-5 text-teal-600" />
-                <h4 className="font-black text-slate-900">Available slots</h4>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                {doctor.slots.map((slot) => (
-                  <button
-                    key={slot}
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:border-teal-500 hover:bg-teal-50 hover:text-teal-700"
+                  <Link
+                    to="/patient-dashboard"
+                    className="block rounded-2xl bg-slate-950 px-5 py-3.5 text-center text-sm font-bold text-white transition hover:bg-cyan-700"
                   >
-                    {slot}
-                  </button>
-                ))}
-              </div>
-
-              <button className="mt-5 w-full rounded-2xl bg-slate-950 px-5 py-3 font-bold text-white hover:bg-teal-700">
-                Book Appointment
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      {filteredDoctors.length === 0 && (
-        <div className="mt-10 rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <h3 className="text-2xl font-black text-slate-950">No doctors found</h3>
-          <p className="mt-2 text-slate-600">Try another department or search keyword.</p>
-        </div>
-      )}
-    </section>
+                    Book from Patient Dashboard
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
 

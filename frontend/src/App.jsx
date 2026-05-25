@@ -28,7 +28,10 @@ function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
         <Route path="/otp-verification" element={<OtpVerification />} />
+        <Route path="/verify-otp" element={<OtpVerification />} />
+        <Route path="/verify" element={<OtpVerification />} />
 
         <Route path="/doctors" element={<Doctors />} />
         <Route path="/patient-dashboard" element={<PatientDashboard />} />
