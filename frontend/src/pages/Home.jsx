@@ -1,177 +1,255 @@
 import { Link } from "react-router";
 import {
+  Activity,
+  ArrowRight,
+  BadgeCheck,
   CalendarCheck,
-  FileText,
+  CheckCircle2,
+  Clock3,
+  FileCheck2,
+  Headphones,
+  HeartPulse,
+  LockKeyhole,
   ShieldCheck,
   Stethoscope,
-  UploadCloud,
-  Video,
+  UsersRound,
 } from "lucide-react";
+import HeroSection from "./homeComponents/Hero";
+import StatsSection from "./homeComponents/StatsSection";
+import ServicesSection from "./homeComponents/ServicesSection";
 
-const features = [
+const services = [
   {
-    icon: Stethoscope,
-    title: "Specialist Doctors",
-    text: "Find doctors by department and check available consultation slots.",
+    icon: <Stethoscope size={24} />,
+    title: "Find Specialist Doctors",
+    description:
+      "Search doctors by name, department, specialization, consultation fee, and availability.",
   },
   {
-    icon: CalendarCheck,
-    title: "Smart Appointment",
-    text: "Book online appointments and track consultation status step by step.",
+    icon: <CalendarCheck size={24} />,
+    title: "Appointment Management",
+    description:
+      "Patients can book appointments while doctors can manage consultation status.",
   },
   {
-    icon: FileText,
+    icon: <FileCheck2 size={24} />,
     title: "Digital Prescription",
-    text: "Receive downloadable prescriptions with secure verification tokens.",
+    description:
+      "Doctors can create prescriptions with medicines, tests, advice, and follow-up dates.",
   },
   {
-    icon: UploadCloud,
-    title: "Medical Records",
-    text: "Upload previous reports and clinical documents for doctor review.",
+    icon: <ShieldCheck size={24} />,
+    title: "Prescription Verification",
+    description:
+      "Patients and pharmacies can verify prescriptions using secure RX verification tokens.",
+  },
+  {
+    icon: <Headphones size={24} />,
+    title: "Support Ticket",
+    description:
+      "Patients can create support tickets and track status updates from the admin panel.",
+  },
+  {
+    icon: <BadgeCheck size={24} />,
+    title: "Reissue Request",
+    description:
+      "Patients can request duplicate or corrected prescription copies with admin review.",
   },
 ];
 
-const workflow = ["Register", "Verify OTP", "Book Doctor", "Consult Online", "Get Prescription"];
+const portals = [
+  {
+    title: "Patient Portal",
+    text: "Register, verify OTP, search doctors, view prescriptions, submit support tickets, and request prescription copies.",
+    icon: <UsersRound size={26} />,
+    link: "/patient-dashboard",
+    accent: "from-emerald-500 to-teal-400"
+  },
+  {
+    title: "Doctor Portal",
+    text: "View assigned appointments, update consultation status, and create digital prescriptions.",
+    icon: <Stethoscope size={26} />,
+    link: "/doctor-dashboard",
+    accent: "from-teal-500 to-cyan-400"
+  },
+  {
+    title: "Admin Portal",
+    text: "Monitor doctors, review support tickets, and approve or reject prescription replacement requests.",
+    icon: <ShieldCheck size={26} />,
+    link: "/admin-dashboard",
+    accent: "from-cyan-500 to-emerald-400"
+  },
+];
+
+const processSteps = [
+  {
+    number: "01",
+    title: "Create Account",
+    text: "Patient registers and verifies the account using secure OTP.",
+  },
+  {
+    number: "02",
+    title: "Find Doctor",
+    text: "Patient searches specialist doctors and checks live details.",
+  },
+  {
+    number: "03",
+    title: "Consultation",
+    text: "Doctor manages appointment status and configuration notes.",
+  },
+  {
+    number: "04",
+    title: "Prescription",
+    text: "Digital prescription is created and verified using RX token.",
+  },
+];
 
 function Home() {
   return (
-    <div>
-      <section className="relative overflow-hidden">
-        <div className="absolute left-[-120px] top-[-120px] h-80 w-80 rounded-full bg-teal-200/40 blur-3xl" />
-        <div className="absolute bottom-[-140px] right-[-100px] h-96 w-96 rounded-full bg-cyan-200/50 blur-3xl" />
+    <main className="overflow-hidden bg-[#fafdfb] text-slate-900 selection:bg-emerald-500 selection:text-white">
+      
+      {/* --- HERO SECTION --- */}
+      <HeroSection />
 
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-2">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-700 shadow-sm">
-              <ShieldCheck className="h-4 w-4" />
-              Secure Telemedicine Healthcare Platform
+      <StatsSection />
+
+      <ServicesSection services={services} />
+
+      {/* --- PROCESS/FLOW SECTION --- */}
+      <section className="bg-gradient-to-b from-[#f9fdfa] to-[#f3faf5] py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-12 lg:grid-cols-12 lg:items-start">
+            
+            <div className="lg:col-span-4 lg:sticky lg:top-28 space-y-4 text-center lg:text-left">
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-600">Journey Map</p>
+              <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+                A clean patient to prescription journey.
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                Engineered with explicit operational sequence layout logic, reducing process clutter while ensuring rigid verification checkpoints.
+              </p>
             </div>
 
-            <h1 className="mt-7 text-5xl font-black leading-tight tracking-tight text-slate-950 md:text-6xl">
-              Healthcare access, connected through one modern portal.
-            </h1>
-
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-              MediLink allows patients to register online, verify accounts, book doctors,
-              upload medical records, attend consultations, and download verified digital prescriptions.
-            </p>
-
-            <div className="mt-9 flex flex-col gap-4 sm:flex-row">
-              <Link
-                to="/register"
-                className="rounded-2xl bg-teal-600 px-7 py-4 text-center font-bold text-white shadow-lg shadow-teal-600/20 hover:bg-teal-700"
-              >
-                Create Patient Account
-              </Link>
-
-              <Link
-                to="/doctors"
-                className="rounded-2xl border border-slate-300 bg-white px-7 py-4 text-center font-bold text-slate-800 shadow-sm hover:border-teal-500 hover:text-teal-700"
-              >
-                Browse Doctors
-              </Link>
-            </div>
-
-            <div className="mt-10 grid max-w-xl grid-cols-3 gap-4">
-              {[
-                ["24+", "Doctors"],
-                ["128", "Appointments"],
-                ["98%", "Secure Flow"],
-              ].map(([number, label]) => (
-                <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-2xl font-black text-slate-950">{number}</p>
-                  <p className="mt-1 text-sm font-medium text-slate-500">{label}</p>
+            <div className="lg:col-span-8 grid gap-4 sm:grid-cols-2">
+              {processSteps.map((step) => (
+                <div
+                  key={step.number}
+                  className="group relative rounded-3xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md hover:border-emerald-200"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-4xl font-black text-slate-100 group-hover:text-emerald-100 transition-colors duration-300">
+                      {step.number}
+                    </span>
+                    <HeartPulse size={16} className="text-slate-300 group-hover:text-emerald-500 group-hover:animate-pulse transition-colors" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-bold text-slate-900">
+                    {step.title}
+                  </h3>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500 font-medium">
+                    {step.text}
+                  </p>
                 </div>
               ))}
             </div>
+
           </div>
+        </div>
+      </section>
 
-          <div className="relative">
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-200">
-              <div className="rounded-[1.5rem] bg-slate-950 p-6 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-teal-300">Live Consultation</p>
-                    <h2 className="mt-2 text-3xl font-black">Patient Care Room</h2>
-                  </div>
-                  <div className="rounded-2xl bg-teal-500 p-3">
-                    <Video className="h-6 w-6" />
-                  </div>
-                </div>
+      {/* --- PORTALS & ARCHITECTURE SECTION --- */}
+      <section id="about" className="scroll-mt-20 bg-slate-950 py-24 text-white relative overflow-hidden">
+        {/* Subtle grid layer for dark section */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(circle_at_center,white,transparent_80%)] opacity-20" />
 
-                <div className="mt-8 rounded-3xl bg-white/10 p-5">
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-teal-400 to-cyan-400" />
-                    <div>
-                      <h3 className="text-xl font-bold">Dr. Ayesha Rahman</h3>
-                      <p className="text-sm text-slate-300">Cardiology Specialist</p>
-                    </div>
-                  </div>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
+            
+            <div className="lg:col-span-5 space-y-6 text-center lg:text-left">
+              <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400">Gateway Framework</p>
+              <h2 className="text-3xl font-black tracking-tight sm:text-5xl leading-tight">
+                Three portals.<br />One connected system.
+              </h2>
+              <p className="text-sm text-slate-400 max-w-xl mx-auto lg:mx-0 font-medium">
+                MediLink enforces structural integrity using isolated views across explicit system instances managed seamlessly through dynamic routing setups.
+              </p>
 
-                  <div className="mt-6 grid grid-cols-2 gap-4">
-                    <div className="rounded-2xl bg-white/10 p-4">
-                      <p className="text-sm text-slate-300">Slot</p>
-                      <p className="mt-1 font-bold">10:30 AM</p>
-                    </div>
-                    <div className="rounded-2xl bg-white/10 p-4">
-                      <p className="text-sm text-slate-300">Status</p>
-                      <p className="mt-1 font-bold text-emerald-300">Approved</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 rounded-3xl bg-teal-500 p-5">
-                  <p className="text-sm font-semibold text-teal-50">Prescription token</p>
-                  <p className="mt-2 text-2xl font-black">RX-ML-2026-0924</p>
-                </div>
+              <div className="space-y-3 pt-2">
+                <AboutCheck text="Secure JWT state processing architecture & database abstraction" />
+                <AboutCheck text="Unified synchronous API mapping operations" />
               </div>
             </div>
+
+            <div className="lg:col-span-7 grid gap-4 sm:grid-cols-3">
+              {portals.map((portal) => (
+                <Link
+                  key={portal.title}
+                  to={portal.link}
+                  className="group relative flex flex-col justify-between rounded-3xl border border-slate-800 bg-slate-900/60 p-6 transition-all duration-300 hover:-translate-y-2 hover:bg-slate-900 hover:border-slate-700"
+                >
+                  <div>
+                    <div className={`mb-6 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${portal.accent} text-slate-950 shadow-md`}>
+                      {portal.icon}
+                    </div>
+                    <h3 className="text-lg font-bold tracking-tight text-white group-hover:text-emerald-400 transition-colors">
+                      {portal.title}
+                    </h3>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-400 font-medium">
+                      {portal.text}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 flex items-center gap-2 text-xs font-bold text-slate-200 group-hover:text-white">
+                    <span>Enter Gateway</span>
+                    <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-1" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+
           </div>
-        </div>
-      </section>
 
-      <section className="mx-auto max-w-7xl px-6 py-14">
-        <div className="text-center">
-          <p className="font-bold text-teal-700">Core Modules</p>
-          <h2 className="mt-3 text-4xl font-black text-slate-950">
-            Everything needed for digital consultation
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-slate-600">
-            The system covers patient, doctor, and admin workflows in one organized web platform.
-          </p>
-        </div>
-
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {features.map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <div key={feature.title} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm hover:shadow-md">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                  <Icon className="h-7 w-7" />
-                </div>
-                <h3 className="mt-5 text-xl font-black text-slate-950">{feature.title}</h3>
-                <p className="mt-3 leading-7 text-slate-600">{feature.text}</p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 pb-20">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
-          <h2 className="text-3xl font-black text-slate-950">Consultation Workflow</h2>
-          <div className="mt-8 grid gap-4 md:grid-cols-5">
-            {workflow.map((step, index) => (
-              <div key={step} className="rounded-3xl bg-slate-50 p-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-600 font-black text-white">
-                  {index + 1}
-                </div>
-                <p className="mt-4 font-bold text-slate-900">{step}</p>
-              </div>
-            ))}
+          {/* Infrastructure Cards Bottom Grid */}
+          <div className="mt-16 grid gap-4 rounded-3xl border border-slate-800 bg-slate-900/30 p-4 sm:grid-cols-3 backdrop-blur-sm">
+            <SystemCard
+              icon={<Activity size={20} />}
+              title="Stateful Express Engine"
+              text="Asynchronous REST architecture matching schema topologies with structural endpoints."
+            />
+            <SystemCard
+              icon={<LockKeyhole size={20} />}
+              title="Granular Token Security"
+              text="Automated payload extraction confirming authorization state handling constraints."
+            />
+            <SystemCard
+              icon={<Clock3 size={20} />}
+              title="Live Compilation Layout"
+              text="Pre-tested modular logic loops guaranteeing immediate demonstration readiness."
+            />
           </div>
+
         </div>
       </section>
+    </main>
+  );
+}
+
+function AboutCheck({ text }) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl bg-slate-900/80 border border-slate-800/60 p-3 shadow-inner">
+      <CheckCircle2 className="shrink-0 text-emerald-400 mt-0.5" size={16} />
+      <p className="text-xs font-medium text-slate-300 leading-normal">{text}</p>
+    </div>
+  );
+}
+
+function SystemCard({ icon, title, text }) {
+  return (
+    <div className="rounded-2xl bg-slate-950/40 p-5 border border-transparent hover:border-slate-800/80 transition-all duration-300">
+      <div className="mb-3 flex items-center gap-2 text-emerald-400">
+        <span className="p-1 rounded-lg bg-slate-900">{icon}</span>
+        <h3 className="text-sm font-bold text-white">{title}</h3>
+      </div>
+      <p className="text-xs leading-relaxed text-slate-400 font-medium">{text}</p>
     </div>
   );
 }

@@ -185,9 +185,10 @@ export const getDoctorAppointments = async (req, res) => {
       });
 
       if (!doctorProfile) {
-        return res.status(404).json({
-          success: false,
-          message: "Doctor profile not found",
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          appointments: [],
         });
       }
 

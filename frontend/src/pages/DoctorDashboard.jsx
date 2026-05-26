@@ -1,21 +1,32 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router";
 import {
-  AlertCircle,
   CalendarDays,
   CheckCircle2,
   Clock,
   FileText,
   Loader2,
-  RefreshCw,
   ShieldCheck,
   Stethoscope,
-  UserRound,
   Video,
 } from "lucide-react";
 import { appointmentApi, authApi, prescriptionApi } from "../services/api";
+import DashboardLayout from "../components/DashboardLayout";
+import {
+  DataPanel,
+  EmptyState,
+  ErrorScreen,
+  formatDate,
+  InfoRow,
+  LoadingScreen,
+  RecordCard,
+  StatCard,
+  StatusBadge,
+} from "../components/dashboard/ui";
+import { getDashboardPath } from "../utils/auth";
 
 function DoctorDashboard() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -30,46 +41,51 @@ function DoctorDashboard() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastSynced, setLastSynced] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const formatDate = (dateValue) => {
-    if (!dateValue) return "N/A";
+  const fetchDashboardData = useCallback(
+    async (isRefresh = false) => {
+      try {
+        if (isRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError("");
+        setSuccess("");
 
-    return new Date(dateValue).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
+        const meResponse = await authApi.getMe();
+        const currentUser = meResponse.user || null;
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      setSuccess("");
+        if (currentUser?.role && currentUser.role !== "doctor") {
+          navigate(getDashboardPath(currentUser.role), { replace: true });
+          return;
+        }
 
-      const [meResponse, appointmentsResponse] = await Promise.all([
-        authApi.getMe(),
-        appointmentApi.getDoctorAppointments(),
-      ]);
+        const appointmentsResponse =
+          await appointmentApi.getDoctorAppointments();
 
-      setUser(meResponse.user || null);
-      setAppointments(appointmentsResponse.appointments || []);
-    } catch (err) {
-      setError(
-        err.message ||
-          "Failed to load doctor dashboard. Please login again and try."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        setUser(currentUser);
+        localStorage.setItem("medilink_user", JSON.stringify(currentUser));
+        setAppointments(appointmentsResponse.appointments || []);
+        setLastSynced(new Date().toISOString());
+      } catch (err) {
+        setError(
+          err.message ||
+            "Failed to load doctor dashboard. Please login again."
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [navigate]
+  );
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   const handleStatusUpdate = async (appointmentId, status) => {
     try {
@@ -80,7 +96,7 @@ function DoctorDashboard() {
       await appointmentApi.updateStatus(appointmentId, { status });
 
       setSuccess(`Appointment marked as ${status}.`);
-      await fetchDashboardData();
+      await fetchDashboardData(true);
     } catch (err) {
       setError(err.message || "Failed to update appointment status.");
     } finally {
@@ -168,7 +184,7 @@ function DoctorDashboard() {
       });
 
       setSelectedAppointment(null);
-      await fetchDashboardData();
+      await fetchDashboardData(true);
     } catch (err) {
       setError(err.message || "Failed to create prescription.");
     } finally {
@@ -181,7 +197,7 @@ function DoctorDashboard() {
   );
 
   const confirmedAppointments = appointments.filter(
-    (appointment) => appointment.status === "confirmed"
+    (appointment) => appointment.status === "approved"
   );
 
   const completedAppointments = appointments.filter(
@@ -189,261 +205,161 @@ function DoctorDashboard() {
   );
 
   if (loading) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-slate-50 px-6">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <Loader2 className="mx-auto animate-spin text-cyan-600" size={44} />
-          <p className="mt-5 text-lg font-bold text-slate-900">
-            Loading doctor dashboard...
-          </p>
-          <p className="mt-2 text-sm text-slate-500">
-            Fetching assigned appointments from backend.
-          </p>
-        </div>
-      </main>
-    );
+    return <LoadingScreen message="Loading doctor workspace" />;
   }
 
-  if (error && !appointments.length) {
+  if (error && !appointments.length && !user) {
     return (
-      <main className="min-h-screen bg-slate-50 px-6 py-16">
-        <section className="mx-auto max-w-3xl rounded-[2rem] border border-red-200 bg-red-50 p-8 text-red-800">
-          <div className="flex items-start gap-4">
-            <AlertCircle size={28} />
-            <div>
-              <h1 className="text-2xl font-black">Dashboard loading failed</h1>
-              <p className="mt-3 text-sm leading-6">{error}</p>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={fetchDashboardData}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white"
-                >
-                  <RefreshCw size={18} />
-                  Try again
-                </button>
-
-                <Link
-                  to="/login"
-                  className="rounded-2xl border border-red-300 px-5 py-3 text-sm font-bold"
-                >
-                  Login again
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
+      <ErrorScreen
+        title="Doctor dashboard unavailable"
+        message={error}
+        onRetry={() => fetchDashboardData()}
+      />
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <section className="relative overflow-hidden bg-slate-950 px-6 py-16 text-white">
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute left-10 top-0 h-72 w-72 rounded-full bg-cyan-500 blur-3xl" />
-          <div className="absolute bottom-0 right-10 h-72 w-72 rounded-full bg-emerald-500 blur-3xl" />
-        </div>
-
-        <div className="relative mx-auto max-w-7xl">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="mb-4 text-sm font-bold uppercase tracking-[0.35em] text-cyan-300">
-                Doctor Dashboard
-              </p>
-
-              <h1 className="text-4xl font-black sm:text-5xl">
-                Welcome, {user?.name || "Doctor"}
-              </h1>
-
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-                Manage patient appointments, update consultation status, and
-                create digital prescriptions connected with the MediLink
-                backend.
-              </p>
-            </div>
-
-            <div className="rounded-[2rem] border border-white/10 bg-white/10 p-5 backdrop-blur">
-              <div className="flex items-center gap-4">
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-cyan-400 text-slate-950">
-                  <UserRound size={28} />
-                </div>
-
-                <div>
-                  <p className="text-sm text-slate-300">Signed in as</p>
-                  <p className="font-black">{user?.email || "N/A"}</p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-cyan-200">
-                    {user?.role || "doctor"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              icon={<CalendarDays size={24} />}
-              title="Total Appointments"
-              value={appointments.length}
-            />
-            <StatCard
-              icon={<Clock size={24} />}
-              title="Pending"
-              value={pendingAppointments.length}
-            />
-            <StatCard
-              icon={<ShieldCheck size={24} />}
-              title="Confirmed"
-              value={confirmedAppointments.length}
-            />
-            <StatCard
-              icon={<CheckCircle2 size={24} />}
-              title="Completed"
-              value={completedAppointments.length}
-            />
-          </div>
-        </div>
+    <DashboardLayout
+      title={`Dr. ${user?.name || "Doctor"}`}
+      subtitle="Manage appointments & prescriptions from live API"
+      role="doctor"
+      user={user}
+      onRefresh={() => fetchDashboardData(true)}
+      refreshing={refreshing}
+      lastSynced={lastSynced}
+    >
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon={<CalendarDays size={20} />}
+          label="Total"
+          value={appointments.length}
+          tone="cyan"
+        />
+        <StatCard
+          icon={<Clock size={20} />}
+          label="Pending"
+          value={pendingAppointments.length}
+          tone="amber"
+        />
+        <StatCard
+          icon={<ShieldCheck size={20} />}
+          label="Approved"
+          value={confirmedAppointments.length}
+          tone="emerald"
+        />
+        <StatCard
+          icon={<CheckCircle2 size={20} />}
+          label="Completed"
+          value={completedAppointments.length}
+          tone="slate"
+        />
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-6 px-6 py-10 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="rounded-[2rem] border border-slate-200 bg-slate-100/70 p-4">
-          <div className="mb-4 flex items-center justify-between gap-3 px-2">
-            <h2 className="text-xl font-black text-slate-950">
-              Assigned Appointments
-            </h2>
-
-            <button
-              type="button"
-              onClick={fetchDashboardData}
-              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:text-cyan-700"
-            >
-              <RefreshCw size={14} />
-              Refresh
-            </button>
-          </div>
-
+      <section
+        id="appointments"
+        className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
+      >
+        <DataPanel
+          title="Patient queue"
+          subtitle={`${appointments.length} appointments`}
+          onRefresh={() => fetchDashboardData(true)}
+        >
           {error && (
-            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <p className="mb-3 rounded-xl bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">
               {error}
-            </div>
+            </p>
           )}
-
           {success && (
-            <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+            <p className="mb-3 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
               {success}
-            </div>
+            </p>
           )}
 
           {appointments.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
-              <Stethoscope className="mx-auto text-slate-300" size={36} />
-              <p className="mt-4 font-bold text-slate-600">
-                No appointments assigned yet.
-              </p>
-            </div>
+            <EmptyState text="No appointments in your queue yet." />
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {appointments.map((appointment) => (
-                <article
-                  key={appointment._id}
-                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <RecordCard key={appointment._id}>
+                  <div className="flex flex-wrap justify-between gap-3">
                     <div>
-                      <p className="text-lg font-black text-slate-950">
+                      <p className="font-black text-slate-950">
                         {appointment.patient?.name || "Patient"}
                       </p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {appointment.patient?.email || "No email"}
+                      <p className="text-sm text-slate-500">
+                        {appointment.patient?.email}
                       </p>
-                      <p className="mt-2 text-sm font-semibold text-cyan-700">
-                        {appointment.symptoms || "Symptoms not provided"}
+                      <p className="mt-1 text-sm font-semibold text-cyan-700">
+                        {appointment.symptoms || "—"}
                       </p>
                     </div>
-
                     <StatusBadge status={appointment.status} />
                   </div>
-
-                  <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
-                    <InfoPill
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <InfoRow
                       label="Date"
                       value={formatDate(appointment.appointmentDate)}
                     />
-                    <InfoPill
+                    <InfoRow
                       label="Time"
-                      value={`${appointment.startTime || "N/A"} - ${
-                        appointment.endTime || "N/A"
-                      }`}
+                      value={`${appointment.startTime} – ${appointment.endTime}`}
                     />
-                    <InfoPill
+                    <InfoRow
                       label="Payment"
-                      value={appointment.paymentStatus || "N/A"}
+                      value={appointment.paymentStatus}
                     />
                   </div>
-
-                  {appointment.medicalNotes && (
-                    <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        Medical Notes
-                      </p>
-                      <p className="mt-1 text-sm text-slate-700">
-                        {appointment.medicalNotes}
-                      </p>
-                    </div>
-                  )}
-
                   {appointment.meetingLink && (
                     <a
                       href={appointment.meetingLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-700"
+                      className="mt-3 inline-flex items-center gap-2 text-sm font-bold text-cyan-700"
                     >
-                      <Video size={17} />
-                      Open meeting link
+                      <Video size={16} />
+                      Join video call
                     </a>
                   )}
-
-                  <div className="mt-5 flex flex-wrap gap-3">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
                       disabled={actionLoading}
                       onClick={() =>
-                        handleStatusUpdate(appointment._id, "confirmed")
+                        handleStatusUpdate(appointment._id, "approved")
                       }
-                      className="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                      className="rounded-xl bg-cyan-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
                     >
-                      Mark Confirmed
+                      Approve
                     </button>
-
                     <button
                       type="button"
                       disabled={actionLoading}
                       onClick={() =>
                         handleStatusUpdate(appointment._id, "completed")
                       }
-                      className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                      className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
                     >
-                      Mark Completed
+                      Complete
                     </button>
-
                     <button
                       type="button"
                       onClick={() => setSelectedAppointment(appointment)}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-bold text-white"
+                      className="inline-flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-2 text-xs font-bold text-white"
                     >
-                      <FileText size={17} />
-                      Create Prescription
+                      <FileText size={14} />
+                      Prescribe
                     </button>
                   </div>
-                </article>
+                </RecordCard>
               ))}
             </div>
           )}
-        </section>
+        </DataPanel>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section
+          id="prescriptions"
+          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
           <div className="mb-6">
             <p className="text-sm font-bold uppercase tracking-[0.25em] text-cyan-700">
               Digital Prescription
@@ -550,40 +466,7 @@ function DoctorDashboard() {
           </form>
         </section>
       </section>
-    </main>
-  );
-}
-
-function StatCard({ icon, title, value }) {
-  return (
-    <div className="rounded-[1.7rem] border border-white/10 bg-white/10 p-5 backdrop-blur">
-      <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-white text-slate-950">
-        {icon}
-      </div>
-      <p className="text-3xl font-black">{value}</p>
-      <p className="mt-1 text-sm text-slate-300">{title}</p>
-    </div>
-  );
-}
-
-function InfoPill({ label, value }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-3">
-      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-        {label}
-      </p>
-      <p className="mt-1 font-bold text-slate-800">{value}</p>
-    </div>
-  );
-}
-
-function StatusBadge({ status }) {
-  const normalizedStatus = status || "unknown";
-
-  return (
-    <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black capitalize text-cyan-700">
-      {normalizedStatus.replace("_", " ")}
-    </span>
+    </DashboardLayout>
   );
 }
 

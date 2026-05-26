@@ -12,8 +12,9 @@ const generatePrescriptionToken = () => {
 // Create prescription
 export const createPrescription = async (req, res) => {
   try {
+    const appointment =
+      req.body.appointment || req.body.appointmentId;
     const {
-      appointment,
       diagnosis,
       symptoms,
       medicines,
@@ -147,13 +148,18 @@ export const getMyPrescriptions = async (req, res) => {
       });
 
       if (!doctorProfile) {
-        return res.status(404).json({
-          success: false,
-          message: "Doctor profile not found",
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          prescriptions: [],
         });
       }
 
       filter.doctor = doctorProfile._id;
+    }
+
+    if (req.user.role === "admin") {
+      // Admin sees all prescriptions
     }
 
     const prescriptions = await Prescription.find(filter)

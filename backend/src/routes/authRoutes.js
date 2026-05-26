@@ -15,7 +15,7 @@ router.post("/login", loginUser);
 router.post("/logout", logoutUser);
 router.post("/verify-otp", verifyOtp);
 
-router.get("/me", protect, getCurrentUser);
+router.get("/me",protect, getCurrentUser);
 
 // Test protected role route
 router.get("/admin-only", protect, authorizeRoles("admin"), (req, res) => {
