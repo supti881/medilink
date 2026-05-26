@@ -92,7 +92,7 @@ function Navbar() {
             <Plus size={22} strokeWidth={3} />
           </div>
           <p className="text-3xl font-medium tracking-tight text-slate-950">
-            Medi<span className="font-serif italic">Link</span>
+            Medi<span className="font-serif ">Link</span>
           </p>
         </Link>
 
