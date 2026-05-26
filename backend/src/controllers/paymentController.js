@@ -131,13 +131,18 @@ export const getMyPayments = async (req, res) => {
       });
 
       if (!doctorProfile) {
-        return res.status(404).json({
-          success: false,
-          message: "Doctor profile not found",
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          payments: [],
         });
       }
 
       filter.doctor = doctorProfile._id;
+    }
+
+    if (req.user.role === "admin") {
+      // Admin sees all payments
     }
 
     const payments = await Payment.find(filter)
@@ -169,6 +174,13 @@ export const getMyPayments = async (req, res) => {
 // Get single payment by ID
 export const getPaymentById = async (req, res) => {
   try {
+    if (req.params.id === "my") {
+      return res.status(400).json({
+        success: false,
+        message: "Use GET /api/payments/my for your payment history",
+      });
+    }
+
     const payment = await Payment.findById(req.params.id)
       .populate("patient", "name email phone role")
       .populate({

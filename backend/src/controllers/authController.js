@@ -221,18 +221,20 @@ export const verifyOtp = async (req, res) => {
 // Get current logged-in user
 export const getCurrentUser = async (req, res) => {
   try {
+    const user = req.user;
+
     return res.status(200).json({
       success: true,
       message: "Current user fetched successfully",
       user: {
-        id: req.user._id,
-        name: req.user.name,
-        email: req.user.email,
-        phone: req.user.phone,
-        role: req.user.role,
-        isVerified: req.user.isVerified,
-        status: req.user.status,
-        createdAt: req.user.createdAt,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: user.isVerified,
+        status: user.status,
+        createdAt: user.createdAt,
       },
     });
   } catch (error) {
@@ -243,7 +245,6 @@ export const getCurrentUser = async (req, res) => {
     });
   }
 };
-
 // Logout user
 export const logoutUser = async (req, res) => {
   try {

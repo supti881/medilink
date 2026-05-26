@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Lock, Mail, Loader2, ShieldCheck } from "lucide-react";
 import { authApi } from "../services/api";
+import { getDashboardPath } from "../utils/auth";
 
 function Login() {
   const navigate = useNavigate();
@@ -10,6 +11,11 @@ function Login() {
     email: "",
     password: "",
   });
+
+  // useEffect(async ()=>{
+  //    const res  = await fetch(`http://localhost:5000/api/auth/me?email=hitesh@example.com`)
+  //    console.log(res)
+  // },[])
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -42,13 +48,16 @@ function Login() {
         email: formData.email,
         password: formData.password,
       });
+   
 
       localStorage.setItem("medilink_user", JSON.stringify(response.user));
 
       setSuccess("Login successful. Redirecting...");
 
+      const dashboardPath = getDashboardPath(response.user?.role);
+
       setTimeout(() => {
-        navigate("/");
+        navigate(dashboardPath);
       }, 700);
     } catch (err) {
       setError(err.message || "Login failed. Please try again.");

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+import BookAppointmentModal from "../components/BookAppointmentModal";
+import { tokenService } from "../services/api";
 import {
   AlertCircle,
   CalendarDays,
@@ -14,6 +16,8 @@ import {
 import { doctorApi } from "../services/api";
 
 function Doctors() {
+  const navigate = useNavigate();
+  const [bookDoctor, setBookDoctor] = useState(null);
   const [doctors, setDoctors] = useState([]);
   const [filteredDoctors, setFilteredDoctors] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -295,18 +299,32 @@ function Doctors() {
                     </div>
                   </div>
 
-                  <Link
-                    to="/patient-dashboard"
-                    className="block rounded-2xl bg-slate-950 px-5 py-3.5 text-center text-sm font-bold text-white transition hover:bg-cyan-700"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!tokenService.getToken()) {
+                        navigate("/login");
+                        return;
+                      }
+                      setBookDoctor(doctor);
+                    }}
+                    className="block w-full rounded-2xl bg-slate-950 px-5 py-3.5 text-center text-sm font-bold text-white transition hover:bg-cyan-700"
                   >
-                    Book from Patient Dashboard
-                  </Link>
+                    Book appointment
+                  </button>
                 </div>
               </article>
             ))}
           </div>
         )}
       </section>
+
+      <BookAppointmentModal
+        doctor={bookDoctor}
+        open={Boolean(bookDoctor)}
+        onClose={() => setBookDoctor(null)}
+        onSuccess={() => navigate("/patient-dashboard")}
+      />
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   User,
   Mail,
@@ -12,6 +12,8 @@ import {
 import { authApi } from "../services/api";
 
 function Register() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -78,6 +80,10 @@ function Register() {
       if (response.devOtp) {
         setDevOtp(response.devOtp);
       }
+
+      setTimeout(() => {
+        navigate("/otp-verification");
+      }, response.devOtp ? 2500 : 1200);
 
       setFormData({
         name: "",
@@ -170,7 +176,7 @@ function Register() {
                   {devOtp}
                 </p>
                 <Link
-                  to="/verify-otp"
+                  to="/otp-verification"
                   className="mt-3 inline-block font-bold text-cyan-700"
                 >
                   Go to OTP verification
