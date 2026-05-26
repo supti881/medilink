@@ -1,357 +1,527 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import {
-  Activity,
-  AlertTriangle,
-  CalendarDays,
+  AlertCircle,
   CheckCircle2,
-  Clock3,
-  CreditCard,
+  ClipboardList,
   FileText,
-  MessageSquare,
-  Printer,
-  Search,
-  Settings,
+  Headphones,
+  Loader2,
+  RefreshCw,
   ShieldCheck,
-  UserCheck,
+  Stethoscope,
+  UserRound,
   Users,
-  XCircle,
 } from "lucide-react";
-
-const stats = [
-  { label: "Total Patients", value: "1,248", icon: Users, color: "bg-teal-50 text-teal-700" },
-  { label: "Pending Reviews", value: "32", icon: Clock3, color: "bg-amber-50 text-amber-700" },
-  { label: "Approved Today", value: "18", icon: CheckCircle2, color: "bg-emerald-50 text-emerald-700" },
-  { label: "Support Tickets", value: "09", icon: MessageSquare, color: "bg-cyan-50 text-cyan-700" },
-];
-
-const applications = [
-  {
-    patient: "Mst. Sharmin Akter",
-    department: "Cardiology",
-    doctor: "Dr. Ayesha Rahman",
-    status: "Under Review",
-    payment: "Paid",
-    submitted: "21 May 2026",
-  },
-  {
-    patient: "Rima Begum",
-    department: "Medicine",
-    doctor: "Dr. Tanvir Ahmed",
-    status: "Correction Required",
-    payment: "Pending",
-    submitted: "20 May 2026",
-  },
-  {
-    patient: "Nafis Ahmed",
-    department: "Dermatology",
-    doctor: "Dr. Nusrat Jahan",
-    status: "Approved",
-    payment: "Paid",
-    submitted: "19 May 2026",
-  },
-];
-
-const slots = [
-  { department: "Cardiology", doctor: "Dr. Ayesha Rahman", capacity: "12", booked: "09" },
-  { department: "Medicine", doctor: "Dr. Tanvir Ahmed", capacity: "18", booked: "14" },
-  { department: "Dermatology", doctor: "Dr. Nusrat Jahan", capacity: "10", booked: "07" },
-];
-
-const auditLogs = [
-  "Admin approved Sharmin Akter's consultation request.",
-  "Correction request sent to Rima Begum for blurry report upload.",
-  "Payment status verified for prescription token RX-ML-2026-0924.",
-  "Doctor slot capacity updated for Cardiology department.",
-];
-
-function getStatusClass(status) {
-  if (status === "Approved") return "bg-emerald-50 text-emerald-700";
-  if (status === "Correction Required") return "bg-amber-50 text-amber-700";
-  if (status === "Rejected") return "bg-rose-50 text-rose-700";
-  return "bg-cyan-50 text-cyan-700";
-}
-
-function getPaymentClass(payment) {
-  if (payment === "Paid") return "bg-emerald-50 text-emerald-700";
-  if (payment === "Pending") return "bg-amber-50 text-amber-700";
-  return "bg-rose-50 text-rose-700";
-}
+import {
+  authApi,
+  doctorApi,
+  replacementRequestApi,
+  supportTicketApi,
+} from "../services/api";
 
 function AdminDashboard() {
+  const [user, setUser] = useState(null);
+  const [doctors, setDoctors] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [replacementRequests, setReplacementRequests] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const formatDate = (dateValue) => {
+    if (!dateValue) return "N/A";
+
+    return new Date(dateValue).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const fetchAdminData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      setSuccess("");
+
+      const [meResponse, doctorsResponse, ticketsResponse, reissueResponse] =
+        await Promise.all([
+          authApi.getMe(),
+          doctorApi.getAll(),
+          supportTicketApi.getAllTickets(),
+          replacementRequestApi.getAllRequests(),
+        ]);
+
+      setUser(meResponse.user || null);
+      setDoctors(doctorsResponse.doctors || []);
+      setTickets(ticketsResponse.tickets || []);
+      setReplacementRequests(reissueResponse.requests || []);
+    } catch (err) {
+      setError(
+        err.message ||
+          "Failed to load admin dashboard. Please login as admin and try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
+
+  const handleTicketUpdate = async (ticketId, status) => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setSuccess("");
+
+      await supportTicketApi.update(ticketId, {
+        status,
+        adminReply:
+          status === "resolved"
+            ? "Your support ticket has been reviewed and resolved by MediLink admin."
+            : "Your support ticket is being reviewed by MediLink admin.",
+      });
+
+      setSuccess(`Support ticket marked as ${status}.`);
+      await fetchAdminData();
+    } catch (err) {
+      setError(err.message || "Failed to update support ticket.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReplacementUpdate = async (requestId, status) => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setSuccess("");
+
+      await replacementRequestApi.update(requestId, {
+        status,
+        paymentStatus: status === "approved" ? "waived" : "pending",
+        adminNote:
+          status === "approved"
+            ? "Duplicate prescription request approved for patient use."
+            : "Duplicate prescription request rejected after admin review.",
+      });
+
+      setSuccess(`Replacement request marked as ${status}.`);
+      await fetchAdminData();
+    } catch (err) {
+      setError(err.message || "Failed to update replacement request.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openTickets = tickets.filter(
+    (ticket) => ticket.status === "open" || ticket.status === "in_progress"
+  );
+
+  const resolvedTickets = tickets.filter((ticket) => ticket.status === "resolved");
+
+  const pendingReissue = replacementRequests.filter(
+    (request) => request.status === "pending"
+  );
+
+  const approvedReissue = replacementRequests.filter(
+    (request) => request.status === "approved"
+  );
+
+  if (loading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-50 px-6">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-10 text-center shadow-sm">
+          <Loader2 className="mx-auto animate-spin text-cyan-600" size={44} />
+          <p className="mt-5 text-lg font-bold text-slate-900">
+            Loading admin dashboard...
+          </p>
+          <p className="mt-2 text-sm text-slate-500">
+            Fetching doctors, support tickets, and replacement requests.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (error && !doctors.length && !tickets.length && !replacementRequests.length) {
+    return (
+      <main className="min-h-screen bg-slate-50 px-6 py-16">
+        <section className="mx-auto max-w-3xl rounded-[2rem] border border-red-200 bg-red-50 p-8 text-red-800">
+          <div className="flex items-start gap-4">
+            <AlertCircle size={28} />
+            <div>
+              <h1 className="text-2xl font-black">Admin dashboard failed</h1>
+              <p className="mt-3 text-sm leading-6">{error}</p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={fetchAdminData}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold text-white"
+                >
+                  <RefreshCw size={18} />
+                  Try again
+                </button>
+
+                <Link
+                  to="/login"
+                  className="rounded-2xl border border-red-300 px-5 py-3 text-sm font-bold"
+                >
+                  Login as admin
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <section className="mx-auto max-w-7xl px-6 py-10">
-      <div className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-xl shadow-slate-200">
-        <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-teal-200">
-              <ShieldCheck className="h-4 w-4" />
-              Administrative Control Center
+    <main className="min-h-screen bg-slate-50">
+      <section className="relative overflow-hidden bg-slate-950 px-6 py-16 text-white">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute left-10 top-0 h-72 w-72 rounded-full bg-cyan-500 blur-3xl" />
+          <div className="absolute bottom-0 right-10 h-72 w-72 rounded-full bg-emerald-500 blur-3xl" />
+        </div>
+
+        <div className="relative mx-auto max-w-7xl">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="mb-4 text-sm font-bold uppercase tracking-[0.35em] text-cyan-300">
+                Admin Control Center
+              </p>
+
+              <h1 className="text-4xl font-black sm:text-5xl">
+                Welcome, {user?.name || "Admin"}
+              </h1>
+
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
+                Monitor doctors, review support tickets, and approve or reject
+                prescription replacement requests from one connected dashboard.
+              </p>
             </div>
 
-            <h2 className="mt-5 text-4xl font-black tracking-tight md:text-5xl">
-              Review applications, manage slots, and monitor platform activity.
+            <div className="rounded-[2rem] border border-white/10 bg-white/10 p-5 backdrop-blur">
+              <div className="flex items-center gap-4">
+                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-cyan-400 text-slate-950">
+                  <UserRound size={28} />
+                </div>
+
+                <div>
+                  <p className="text-sm text-slate-300">Signed in as</p>
+                  <p className="font-black">{user?.email || "N/A"}</p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-cyan-200">
+                    {user?.role || "admin"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <StatCard
+              icon={<Stethoscope size={24} />}
+              title="Doctors"
+              value={doctors.length}
+            />
+            <StatCard
+              icon={<Headphones size={24} />}
+              title="Open Tickets"
+              value={openTickets.length}
+            />
+            <StatCard
+              icon={<CheckCircle2 size={24} />}
+              title="Resolved Tickets"
+              value={resolvedTickets.length}
+            />
+            <StatCard
+              icon={<FileText size={24} />}
+              title="Pending Reissue"
+              value={pendingReissue.length}
+            />
+            <StatCard
+              icon={<ShieldCheck size={24} />}
+              title="Approved Reissue"
+              value={approvedReissue.length}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-6 px-6 py-10 xl:grid-cols-[0.9fr_1.1fr]">
+        <section className="rounded-[2rem] border border-slate-200 bg-slate-100/70 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3 px-2">
+            <h2 className="text-xl font-black text-slate-950">
+              Doctor Directory
             </h2>
 
-            <p className="mt-4 max-w-3xl leading-8 text-slate-300">
-              Admins can verify patient requests, approve or reject applications,
-              request corrections, monitor payments, manage appointment capacity,
-              and review audit logs.
-            </p>
-          </div>
-
-          <div className="rounded-3xl bg-white/10 p-5">
-            <p className="text-sm font-semibold text-slate-300">System health</p>
-            <p className="mt-2 text-4xl font-black">98%</p>
-            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-[98%] rounded-full bg-teal-400" />
-            </div>
-            <p className="mt-3 text-sm text-slate-300">All core services operational</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-6 md:grid-cols-4">
-        {stats.map((item) => {
-          const Icon = item.icon;
-
-          return (
-            <div key={item.label} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${item.color}`}>
-                <Icon className="h-6 w-6" />
-              </div>
-              <p className="mt-5 text-sm font-bold text-slate-500">{item.label}</p>
-              <h3 className="mt-2 text-3xl font-black text-slate-950">{item.value}</h3>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-2xl font-black text-slate-950">Patient Application Review</h3>
-              <p className="mt-1 text-slate-600">Approve, reject, or request correction from submitted consultation files.</p>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-12 pr-4 font-medium outline-none focus:border-teal-500 md:w-72"
-                placeholder="Search patient..."
-              />
-            </div>
-          </div>
-
-          <div className="mt-6 overflow-hidden rounded-3xl border border-slate-200">
-            <table className="w-full min-w-[760px] text-left">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-5 py-4 text-sm font-black text-slate-600">Patient</th>
-                  <th className="px-5 py-4 text-sm font-black text-slate-600">Department</th>
-                  <th className="px-5 py-4 text-sm font-black text-slate-600">Doctor</th>
-                  <th className="px-5 py-4 text-sm font-black text-slate-600">Status</th>
-                  <th className="px-5 py-4 text-sm font-black text-slate-600">Payment</th>
-                  <th className="px-5 py-4 text-sm font-black text-slate-600">Action</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {applications.map((application) => (
-                  <tr key={application.patient} className="border-t border-slate-200">
-                    <td className="px-5 py-4">
-                      <p className="font-black text-slate-950">{application.patient}</p>
-                      <p className="mt-1 text-sm text-slate-500">{application.submitted}</p>
-                    </td>
-
-                    <td className="px-5 py-4 font-semibold text-slate-700">
-                      {application.department}
-                    </td>
-
-                    <td className="px-5 py-4 font-semibold text-slate-700">
-                      {application.doctor}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <span className={`rounded-full px-3 py-1.5 text-xs font-black ${getStatusClass(application.status)}`}>
-                        {application.status}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <span className={`rounded-full px-3 py-1.5 text-xs font-black ${getPaymentClass(application.payment)}`}>
-                        {application.payment}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="flex gap-2">
-                        <button className="rounded-xl bg-teal-600 px-3 py-2 text-xs font-black text-white hover:bg-teal-700">
-                          Approve
-                        </button>
-                        <button className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:border-amber-500 hover:text-amber-700">
-                          Correction
-                        </button>
-                        <button className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700">
-                          Reject
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                <UserCheck className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-950">Verification Decision</h3>
-                <p className="text-sm text-slate-500">Quick admin action panel</p>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              <button className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 font-black text-white hover:bg-emerald-700">
-                <CheckCircle2 className="h-5 w-5" />
-                Approve Application
-              </button>
-
-              <button className="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-500 px-5 py-3 font-black text-white hover:bg-amber-600">
-                <AlertTriangle className="h-5 w-5" />
-                Request Correction
-              </button>
-
-              <button className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 font-black text-white hover:bg-rose-700">
-                <XCircle className="h-5 w-5" />
-                Reject Application
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700">
-                <CreditCard className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-950">Payment Overview</h3>
-                <p className="text-sm text-slate-500">Mock transaction monitoring</p>
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-emerald-50 p-4">
-                <p className="text-sm font-bold text-emerald-700">Paid</p>
-                <p className="mt-1 text-2xl font-black text-slate-950">৳8,400</p>
-              </div>
-              <div className="rounded-2xl bg-amber-50 p-4">
-                <p className="text-sm font-bold text-amber-700">Pending</p>
-                <p className="mt-1 text-2xl font-black text-slate-950">৳1,950</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-2xl font-black text-slate-950">Appointment Slot Capacity</h3>
-              <p className="mt-1 text-slate-600">Manage doctor availability and consultation limits.</p>
-            </div>
-
-            <button className="flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 font-black text-white hover:bg-teal-700">
-              <Settings className="h-5 w-5" />
-              Configure
+            <button
+              type="button"
+              onClick={fetchAdminData}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:text-cyan-700"
+            >
+              <RefreshCw size={14} />
+              Refresh
             </button>
           </div>
 
-          <div className="mt-6 space-y-4">
-            {slots.map((slot) => {
-              const percentage = Math.round((Number(slot.booked) / Number(slot.capacity)) * 100);
-
-              return (
-                <div key={slot.doctor} className="rounded-3xl bg-slate-50 p-5">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-lg font-black text-slate-950">{slot.doctor}</p>
-                      <p className="mt-1 text-sm font-semibold text-teal-700">{slot.department}</p>
+          {doctors.length === 0 ? (
+            <EmptyState text="No doctors found." />
+          ) : (
+            <div className="space-y-4">
+              {doctors.map((doctor) => (
+                <article
+                  key={doctor._id}
+                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-100 text-xl font-black text-cyan-700">
+                      {doctor.fullName?.charAt(0) || "D"}
                     </div>
 
-                    <p className="font-black text-slate-900">
-                      {slot.booked}/{slot.capacity} booked
-                    </p>
+                    <div className="min-w-0">
+                      <p className="text-lg font-black text-slate-950">
+                        {doctor.fullName || "Doctor"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-cyan-700">
+                        {doctor.specialization || "Specialist"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {doctor.department || "Department"} · ৳
+                        {doctor.consultationFee || 0}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
-                    <div
-                      className="h-full rounded-full bg-teal-500"
-                      style={{ width: `${percentage}%` }}
+                  <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                    <InfoPill
+                      label="Experience"
+                      value={`${doctor.experienceYears || 0}+ years`}
+                    />
+                    <InfoPill
+                      label="Phone"
+                      value={doctor.phone || doctor.user?.phone || "N/A"}
                     />
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-              <Printer className="h-6 w-6" />
+                </article>
+              ))}
             </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-950">Print Queue</h3>
-              <p className="text-sm text-slate-500">Prescription and summary sheets</p>
-            </div>
-          </div>
+          )}
+        </section>
 
-          <div className="mt-6 space-y-3">
-            {["Prescription RX-0924", "Summary Sheet #1182", "Receipt ML-5409"].map((item) => (
-              <div key={item} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-teal-700" />
-                  <p className="text-sm font-bold text-slate-700">{item}</p>
-                </div>
-                <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">
-                  Ready
-                </span>
+        <section className="grid gap-6">
+          <Panel title="Support Tickets">
+            {error && (
+              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                {error}
               </div>
-            ))}
-          </div>
+            )}
 
-          <button className="mt-5 w-full rounded-2xl bg-teal-600 px-5 py-3 font-black text-white hover:bg-teal-700">
-            Open Print Queue
-          </button>
-        </div>
+            {success && (
+              <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                {success}
+              </div>
+            )}
+
+            {tickets.length === 0 ? (
+              <EmptyState text="No support tickets found." />
+            ) : (
+              <div className="space-y-4">
+                {tickets.map((ticket) => (
+                  <article
+                    key={ticket._id}
+                    className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="text-lg font-black text-slate-950">
+                          {ticket.subject || "Support Ticket"}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {ticket.user?.name ||
+                            ticket.patient?.name ||
+                            ticket.email ||
+                            "User"}
+                        </p>
+                        <p className="mt-3 text-sm leading-6 text-slate-700">
+                          {ticket.message || ticket.description || "No message"}
+                        </p>
+                      </div>
+
+                      <StatusBadge status={ticket.status} />
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() =>
+                          handleTicketUpdate(ticket._id, "in_progress")
+                        }
+                        className="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        Mark In Progress
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => handleTicketUpdate(ticket._id, "resolved")}
+                        className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        Resolve
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Prescription Replacement Requests">
+            {replacementRequests.length === 0 ? (
+              <EmptyState text="No replacement requests found." />
+            ) : (
+              <div className="space-y-4">
+                {replacementRequests.map((request) => (
+                  <article
+                    key={request._id}
+                    className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="text-lg font-black text-slate-950">
+                          {request.requestType || "Replacement Request"}
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-600">
+                          Patient:{" "}
+                          {request.patient?.name ||
+                            request.patient?.email ||
+                            "Patient"}
+                        </p>
+
+                        <p className="mt-1 break-all font-mono text-xs font-bold text-cyan-700">
+                          {request.prescriptionToken || "No token"}
+                        </p>
+
+                        <p className="mt-3 text-sm leading-6 text-slate-700">
+                          {request.reason || "No reason provided."}
+                        </p>
+
+                        <p className="mt-3 text-xs font-semibold text-slate-500">
+                          Requested: {formatDate(request.createdAt)}
+                        </p>
+                      </div>
+
+                      <StatusBadge status={request.status} />
+                    </div>
+
+                    {request.adminNote && (
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Admin Note
+                        </p>
+                        <p className="mt-1 text-sm text-slate-700">
+                          {request.adminNote}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() =>
+                          handleReplacementUpdate(request._id, "approved")
+                        }
+                        className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() =>
+                          handleReplacementUpdate(request._id, "rejected")
+                        }
+                        className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function StatCard({ icon, title, value }) {
+  return (
+    <div className="rounded-[1.7rem] border border-white/10 bg-white/10 p-5 backdrop-blur">
+      <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-white text-slate-950">
+        {icon}
+      </div>
+      <p className="text-3xl font-black">{value}</p>
+      <p className="mt-1 text-sm text-slate-300">{title}</p>
+    </div>
+  );
+}
+
+function Panel({ title, children }) {
+  return (
+    <section className="rounded-[2rem] border border-slate-200 bg-slate-100/70 p-4">
+      <div className="mb-4 flex items-center gap-3 px-2">
+        <ClipboardList size={22} className="text-cyan-700" />
+        <h2 className="text-xl font-black text-slate-950">{title}</h2>
       </div>
 
-      <div className="mt-6 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
-            <Activity className="h-6 w-6" />
-          </div>
-          <div>
-            <h3 className="text-2xl font-black text-slate-950">Audit Log</h3>
-            <p className="text-slate-600">Recent administrative activity monitoring.</p>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {auditLogs.map((log) => (
-            <div key={log} className="rounded-2xl bg-slate-50 px-5 py-4">
-              <p className="font-semibold text-slate-700">{log}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {children}
     </section>
+  );
+}
+
+function InfoPill({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-3">
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </p>
+      <p className="mt-1 font-bold text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const normalizedStatus = status || "unknown";
+
+  return (
+    <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black capitalize text-cyan-700">
+      {normalizedStatus.replace("_", " ")}
+    </span>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
+      <Users className="mx-auto text-slate-300" size={36} />
+      <p className="mt-4 font-bold text-slate-600">{text}</p>
+    </div>
   );
 }
 
