@@ -20,6 +20,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 import "./App.css";
 import ServicePage from "./pages/ServicePage";
+import AboutPage from "./pages/AboutPage";
 
 function App() {
   const location = useLocation();
@@ -33,6 +34,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/service" element={<ServicePage />}/>
+        <Route path="/about" element={<AboutPage></AboutPage>}/>
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
