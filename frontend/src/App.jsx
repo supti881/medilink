@@ -19,6 +19,7 @@ import ReplacementRequest from "./pages/ReplacementRequest";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import "./App.css";
+import ServicePage from "./pages/ServicePage";
 
 function App() {
   const location = useLocation();
@@ -31,6 +32,7 @@ function App() {
 
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/service" element={<ServicePage />}/>
 
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
