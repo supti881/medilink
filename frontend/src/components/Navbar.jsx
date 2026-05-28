@@ -7,8 +7,8 @@ import { getDashboardPath, getStoredUser } from "../utils/auth";
 const baseNavItems = [
   { label: "Home", path: "/" },
   { label: "Doctors", path: "/doctors" },
-  { label: "Services", path: "/#services" },
-  { label: "About", path: "/#about" },
+  { label: "Services", path: "/service" },
+  { label: "About", path: "/about" },
 ];
 
 const otherItems = [
