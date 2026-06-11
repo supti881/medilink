@@ -50,11 +50,7 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
     },
 
-    notes: {
-      type: String,
-      trim: true,
-      default: "",
-    },
+   
 
     gatewayResponse: {
       type: Object,

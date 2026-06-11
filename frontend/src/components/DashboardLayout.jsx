@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link, NavLink, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import {
   Activity,
   ArrowLeft,
@@ -27,8 +27,16 @@ function getNavItems(role) {
   if (role === "doctor") {
     return [
       { label: "Overview", to: "/doctor-dashboard", icon: Activity },
-      { label: "Appointments", to: "/doctor-dashboard#appointments", icon: BadgeCheck },
-      { label: "Prescriptions", to: "/doctor-dashboard#prescriptions", icon: FileCheck2 },
+      {
+        label: "Appointments",
+        to: "/doctor-dashboard#appointments",
+        icon: BadgeCheck,
+      },
+      {
+        label: "Prescriptions",
+        to: "/doctor-dashboard#prescriptions",
+        icon: FileCheck2,
+      },
       { label: "Find doctors", to: "/doctors", icon: Stethoscope },
     ];
   }
@@ -44,7 +52,11 @@ function getNavItems(role) {
 
   return [
     { label: "Overview", to: "/patient-dashboard", icon: Activity },
-    { label: "Appointments", to: "/patient-dashboard#appointments", icon: BadgeCheck },
+    {
+      label: "Appointments",
+      to: "/patient-dashboard#appointments",
+      icon: BadgeCheck,
+    },
     { label: "Find doctors", to: "/doctors", icon: Stethoscope },
     { label: "Payments", to: "/mock-payment", icon: CreditCard },
     { label: "Support", to: "/support-ticket", icon: Headphones },
@@ -57,38 +69,97 @@ const roleThemes = {
   patient: {
     accent: "from-emerald-400 to-teal-500",
     glow: "shadow-emerald-500/20",
-    badge: "text-emerald-300",
+    badge: "text-emerald-700",
   },
   doctor: {
     accent: "from-cyan-400 to-blue-500",
     glow: "shadow-cyan-500/20",
-    badge: "text-cyan-300",
+    badge: "text-cyan-700",
   },
   admin: {
     accent: "from-violet-400 to-fuchsia-500",
     glow: "shadow-violet-500/20",
-    badge: "text-violet-300",
+    badge: "text-violet-700",
   },
 };
 
-// --- SIDEBAR COMPONENT ---
-export function Sidebar({ title, user, role, navItems, theme, onClose, isMobile }) {
-  const getFirstLetter = (name) => (name ? name.charAt(0).toUpperCase() : "U");
+function splitPathAndHash(to) {
+  const [pathname, rawHash = ""] = to.split("#");
+  return {
+    pathname,
+    hash: rawHash ? `#${rawHash}` : "",
+  };
+}
+
+function isMenuItemActive(item, location) {
+  const { pathname, hash } = splitPathAndHash(item.to);
+
+  if (location.pathname !== pathname) {
+    return false;
+  }
+
+  if (!hash) {
+    return !location.hash || location.hash === "#overview" || location.hash === "#profile";
+  }
+
+  return location.hash === hash;
+}
+
+function Sidebar({
+  title,
+  user,
+  role,
+  navItems,
+  theme,
+  onClose,
+  isMobile,
+  location,
+}) {
+  const navigate = useNavigate();
+
+  const getFirstLetter = (name) => {
+    if (!name) return "U";
+    return name.charAt(0).toUpperCase();
+  };
+
+  const profileImage = user?.imageUrl || user?.profileImage || "";
+  const profileLabel =
+    user?.specialization || user?.department || user?.role || title;
+
+  const goToDoctorProfile = () => {
+    if (role !== "doctor") return;
+
+    onClose?.();
+
+    if (location.pathname === "/doctor-dashboard") {
+      navigate("/doctor-dashboard#profile");
+      window.setTimeout(() => {
+        document.getElementById("profile")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 80);
+    } else {
+      navigate("/doctor-dashboard#profile");
+    }
+  };
+
+  const handleMenuClick = () => {
+    onClose?.();
+  };
 
   return (
     <div
       className={cx(
-        "flex h-full flex-col rounded-[24px] border border-white/[0.06] bg-[#09111e] text-white shadow-2xl relative overflow-hidden",
+        "relative flex h-full flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#09111e] text-white shadow-2xl",
         theme.glow
       )}
     >
-      {/* Decorative Top Ambient Light Streak */}
-      <div className="absolute -top-12 left-1/4 right-1/4 h-16 w-1/2 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 blur-xl pointer-events-none" />
+      <div className="pointer-events-none absolute -top-12 left-1/4 right-1/4 h-16 w-1/2 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 blur-xl" />
 
-      {/* Header Section */}
-      <div className="p-5 border-b border-white/[0.06]">
+      <div className="border-b border-white/[0.06] p-5">
         <div className="flex items-center justify-between gap-2">
-          <Link to="/" className="flex items-center gap-3 group" onClick={onClose}>
+          <Link to="/" className="group flex items-center gap-3" onClick={onClose}>
             <div
               className={cx(
                 "grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-slate-950 shadow-md transition-transform duration-300 group-hover:scale-105 group-hover:rotate-6",
@@ -97,12 +168,16 @@ export function Sidebar({ title, user, role, navItems, theme, onClose, isMobile 
             >
               <Stethoscope size={18} strokeWidth={2.5} />
             </div>
+
             <div>
               <p className="text-base font-black tracking-tight text-white">
-                Medi<span className="text-teal-400 font-serif font-normal italic">Link</span>
+                Medi
+                <span className="font-serif font-normal italic text-teal-400">
+                  Link
+                </span>
               </p>
-              <p className="text-[11px] font-semibold text-slate-400 tracking-wide truncate max-w-[150px]">
-                {title}
+              <p className="max-w-[150px] truncate text-[11px] font-semibold tracking-wide text-slate-400">
+                {profileLabel}
               </p>
             </div>
           </Link>
@@ -111,26 +186,52 @@ export function Sidebar({ title, user, role, navItems, theme, onClose, isMobile 
             <button
               type="button"
               onClick={onClose}
-              className="grid h-8 w-8 place-items-center rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white transition active:scale-95"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white active:scale-95"
             >
               <X size={15} />
             </button>
           )}
         </div>
 
-        {/* User Account Capsule Widget */}
-        <div className="mt-5 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3.5 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={goToDoctorProfile}
+          disabled={role !== "doctor"}
+          title={role === "doctor" ? "Click to edit doctor profile" : undefined}
+          className={cx(
+            "mt-5 w-full rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3.5 text-left backdrop-blur-sm transition",
+            role === "doctor"
+              ? "cursor-pointer hover:border-cyan-400/40 hover:bg-cyan-400/[0.06] hover:shadow-lg hover:shadow-cyan-500/10"
+              : "cursor-default"
+          )}
+        >
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-sm bg-white/10 text-white border border-white/10 shadow-inner">
-              {getFirstLetter(user?.name)}
-            </div>
-            <div className="overflow-hidden flex-1">
-              <p className="truncate text-xs font-black text-white">{user?.name || "User"}</p>
-              <p className="truncate text-[11px] font-medium text-slate-400 mt-0.5">
+            {profileImage ? (
+              <img
+                src={profileImage}
+                alt={user?.name || "Profile"}
+                className="h-10 w-10 shrink-0 rounded-xl border border-white/10 object-cover shadow-inner"
+              />
+            ) : (
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-sm font-bold text-white shadow-inner">
+                {getFirstLetter(user?.name)}
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <p className="truncate text-xs font-black text-white">
+                {role === "doctor" && user?.name?.startsWith("Dr.")
+                  ? user.name
+                  : role === "doctor"
+                  ? `Dr. ${user?.name || "Doctor"}`
+                  : user?.name || "User"}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
                 {user?.email || "No email profile"}
               </p>
             </div>
           </div>
+
           <div className="mt-3 flex items-center justify-between border-t border-white/[0.04] pt-2.5">
             <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
               Role Access
@@ -144,76 +245,82 @@ export function Sidebar({ title, user, role, navItems, theme, onClose, isMobile 
               {user?.role || role}
             </span>
           </div>
-        </div>
+
+          {role === "doctor" && (
+            <p className="mt-2 text-[10px] font-bold text-cyan-300">
+              Click this card to edit profile
+            </p>
+          )}
+        </button>
       </div>
 
-      {/* Navigation Stack Links */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar">
+      <nav className="custom-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
         {navItems.map((item) => {
           const Icon = item.icon;
+          const active = isMenuItemActive(item, location);
+
           return (
-            <NavLink
+            <Link
               key={item.to}
               to={item.to}
-              onClick={onClose}
-              className={({ isActive }) =>
-                cx(
-                  "flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-bold transition-all relative group overflow-hidden",
-                  isActive
-                    ? "text-white bg-white/[0.06] border border-white/[0.08]"
-                    : "text-slate-400 hover:bg-white/[0.02] hover:text-white border border-transparent"
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {/* Neon Glow Side Indicator Ring */}
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeGlowBar"
-                      className={cx(
-                        "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
-                        theme.accent
-                      )}
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
-                  )}
-
-                  <Icon
-                    size={17}
-                    strokeWidth={isActive ? 2.5 : 2}
-                    className={cx(
-                      "transition-colors duration-200",
-                      isActive ? "text-teal-400" : "text-slate-500 group-hover:text-slate-300"
-                    )}
-                  />
-                  
-                  <span className="relative z-10">{item.label}</span>
-                </>
+              onClick={handleMenuClick}
+              className={cx(
+                "group relative flex items-center gap-3 overflow-hidden rounded-xl border px-3.5 py-3 text-sm font-bold transition-all",
+                active
+                  ? "border-white/[0.08] bg-white/[0.06] text-white"
+                  : "border-transparent text-slate-400 hover:bg-white/[0.02] hover:text-white"
               )}
-            </NavLink>
+            >
+              {active && (
+                <motion.div
+                  layoutId="activeGlowBar"
+                  className={cx(
+                    "absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full bg-gradient-to-b",
+                    theme.accent
+                  )}
+                  transition={{
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 30,
+                  }}
+                />
+              )}
+
+              <Icon
+                size={17}
+                strokeWidth={active ? 2.5 : 2}
+                className={cx(
+                  "transition-colors duration-200",
+                  active
+                    ? "text-teal-400"
+                    : "text-slate-500 group-hover:text-slate-300"
+                )}
+              />
+
+              <span className="relative z-10">{item.label}</span>
+            </Link>
           );
         })}
       </nav>
 
-      {/* Connection Indicator Footer */}
-      <div className="border-t border-white/[0.06] p-4 bg-slate-950/40 backdrop-blur-md">
+      <div className="border-t border-white/[0.06] bg-slate-950/40 p-4 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <p className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
             </span>
             Core Engine Linked
           </p>
-          <span className="text-[10px] font-mono font-medium text-slate-600">v2.4.0</span>
+          <span className="font-mono text-[10px] font-medium text-slate-600">
+            v2.4.0
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
-// --- MAIN LAYOUT COMPONENT ---
 export default function DashboardLayout({
   title,
   subtitle,
@@ -226,12 +333,13 @@ export default function DashboardLayout({
 }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+
   const navItems = useMemo(() => getNavItems(role), [role]);
   const theme = roleThemes[role] || roleThemes.patient;
 
   useEffect(() => {
     setMobileOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.hash]);
 
   const sidebar = (
     <Sidebar
@@ -242,6 +350,7 @@ export default function DashboardLayout({
       theme={theme}
       onClose={() => setMobileOpen(false)}
       isMobile={mobileOpen}
+      location={location}
     />
   );
 
@@ -268,13 +377,9 @@ export default function DashboardLayout({
               >
                 <Menu size={20} />
               </button>
+
               <div>
-                <p
-                  className={cx(
-                    "text-[10px] font-black uppercase tracking-[0.35em]",
-                    theme.badge.replace("text-", "text-slate-")
-                  )}
-                >
+                <p className={cx("text-[10px] font-black uppercase tracking-[0.35em]", theme.badge)}>
                   {role} · live data
                 </p>
                 <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
@@ -295,6 +400,7 @@ export default function DashboardLayout({
                   Synced {formatDateTime(lastSynced)}
                 </span>
               )}
+
               {onRefresh && (
                 <button
                   type="button"
@@ -309,6 +415,7 @@ export default function DashboardLayout({
                   Refresh
                 </button>
               )}
+
               <Link
                 to="/"
                 className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 sm:inline-flex"
@@ -316,9 +423,10 @@ export default function DashboardLayout({
                 <Home size={16} />
                 Home
               </Link>
+
               <Link
                 to="/"
-                className="inline-flex items-center gap-2 rounded-xl  px-4 py-2.5 text-sm font-bold text-white"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
               >
                 <ArrowLeft size={16} />
                 Exit
@@ -351,6 +459,7 @@ export default function DashboardLayout({
               onClick={() => setMobileOpen(false)}
               aria-label="Close overlay"
             />
+
             <motion.div
               className="absolute left-0 top-0 h-full w-[min(300px,88vw)] p-3"
               initial={{ x: -320 }}

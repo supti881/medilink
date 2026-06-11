@@ -3,6 +3,7 @@ import User from "../models/User.js";
 
 // Check if user is logged in
 export const protect = async (req, res, next) => {
+  // console.log('hitted here')
   try {
     let token;
 
@@ -25,8 +26,10 @@ export const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("decoded",decoded)
 
     const user = await User.findById(decoded.id);
+    // console.log(user)
 
     if (!user) {
       return res.status(401).json({
