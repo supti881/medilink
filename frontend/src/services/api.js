@@ -49,6 +49,40 @@ const request = async (endpoint, options = {}) => {
   return data;
 };
 
+const uploadRequest = async (endpoint, formData) => {
+  const token = getToken();
+
+  const headers = {};
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: "POST",
+    headers,
+    body: formData,
+    credentials: "include",
+  });
+
+  const text = await response.text();
+  let data = {};
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || `Upload failed (${response.status})`);
+  }
+
+  return data;
+};
+
 export const authApi = {
   register: async (payload) => {
     return request("/auth/register", {
@@ -216,6 +250,15 @@ export const replacementRequestApi = {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+  },
+};
+
+export const uploadApi = {
+  uploadDoctorPhoto: async (file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    return uploadRequest("/uploads/doctor-photo", formData);
   },
 };
 

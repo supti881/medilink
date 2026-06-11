@@ -11,6 +11,7 @@ import prescriptionRoutes from "./routes/prescriptionRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import supportTicketRoutes from "./routes/supportTicketRoutes.js";
 import replacementRequestRoutes from "./routes/replacementRequestRoutes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
 
 dotenv.config();
 
@@ -60,6 +61,7 @@ app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/support-tickets", supportTicketRoutes);
 app.use("/api/replacement-requests", replacementRequestRoutes);
+app.use("/api/uploads", uploadRoutes);
 
 // 404 route
 app.use((req, res) => {
