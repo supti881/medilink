@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
   CalendarDays,
+  Camera,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -9,7 +10,6 @@ import {
   Loader2,
   Pill,
   Save,
-  ShieldCheck,
   Stethoscope,
   UserRoundCog,
   Video,
@@ -19,6 +19,7 @@ import {
   authApi,
   doctorApi,
   prescriptionApi,
+  uploadApi,
 } from "../services/api";
 import DashboardLayout from "../components/DashboardLayout";
 import { getDashboardPath } from "../utils/auth";
@@ -66,6 +67,7 @@ function getActiveView(hash) {
 
 function formatDate(value) {
   if (!value) return "Not set";
+
   return new Date(value).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -75,6 +77,7 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   if (!value) return "Not set";
+
   return new Date(value).toLocaleString("en-US", {
     year: "numeric",
     month: "short",
@@ -204,6 +207,7 @@ export default function DoctorDashboard() {
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
+
   const [profileForm, setProfileForm] = useState(emptyProfileForm);
   const [prescriptionForm, setPrescriptionForm] = useState(
     emptyPrescriptionForm
@@ -214,8 +218,10 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [lastSynced, setLastSynced] = useState(null);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -286,11 +292,11 @@ export default function DoctorDashboard() {
       ...user,
       name: doctorProfile?.fullName || user?.name,
       phone: doctorProfile?.phone || user?.phone,
-      imageUrl: doctorProfile?.imageUrl,
+      imageUrl: doctorProfile?.imageUrl || profileForm.imageUrl,
       specialization: doctorProfile?.specialization,
       department: doctorProfile?.department,
     };
-  }, [doctorProfile, user]);
+  }, [doctorProfile, profileForm.imageUrl, user]);
 
   const pendingAppointments = appointments.filter(
     (appointment) => appointment.status === "pending"
@@ -306,7 +312,9 @@ export default function DoctorDashboard() {
 
   const hasPrescriptionForAppointment = (appointmentId) => {
     return prescriptions.some((prescription) => {
-      const appointmentValue = prescription.appointment?._id || prescription.appointment;
+      const appointmentValue =
+        prescription.appointment?._id || prescription.appointment;
+
       return String(appointmentValue) === String(appointmentId);
     });
   };
@@ -318,6 +326,64 @@ export default function DoctorDashboard() {
       ...previous,
       [name]: value,
     }));
+  };
+
+  const handleDoctorPhotoUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image size must be less than 2MB.");
+      event.target.value = "";
+      return;
+    }
+
+    let previewUrl = "";
+
+    try {
+      setPhotoUploading(true);
+      setError("");
+      setSuccess("");
+
+      previewUrl = URL.createObjectURL(file);
+
+      setProfileForm((previous) => ({
+        ...previous,
+        imageUrl: previewUrl,
+      }));
+
+      const response = await uploadApi.uploadDoctorPhoto(file);
+
+      setProfileForm((previous) => ({
+        ...previous,
+        imageUrl: response.imageUrl,
+      }));
+
+      if (response.doctor) {
+        setDoctorProfile(response.doctor);
+      }
+
+      setSuccess("Profile photo uploaded successfully.");
+      await fetchDashboardData(true);
+    } catch (err) {
+      setError(err.message || "Failed to upload profile photo.");
+    } finally {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+
+      setPhotoUploading(false);
+      event.target.value = "";
+    }
   };
 
   const handleProfileSubmit = async (event) => {
@@ -360,6 +426,7 @@ export default function DoctorDashboard() {
       setDoctorProfile(response.doctor || null);
       setProfileForm(buildProfileForm(response.doctor || null, user));
       setSuccess("Doctor profile updated successfully.");
+
       await fetchDashboardData(true);
     } catch (err) {
       setError(err.message || "Failed to update doctor profile.");
@@ -454,6 +521,7 @@ export default function DoctorDashboard() {
       setPrescriptionForm(emptyPrescriptionForm);
       setSelectedAppointment(null);
       setSuccess("Prescription created successfully.");
+
       await fetchDashboardData(true);
     } catch (err) {
       setError(err.message || "Failed to create prescription.");
@@ -466,7 +534,10 @@ export default function DoctorDashboard() {
     return (
       <div className="grid min-h-screen place-items-center bg-slate-100">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <Loader2 className="mx-auto mb-4 animate-spin text-cyan-600" size={34} />
+          <Loader2
+            className="mx-auto mb-4 animate-spin text-cyan-600"
+            size={34}
+          />
           <p className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
             Loading doctor dashboard
           </p>
@@ -502,8 +573,10 @@ export default function DoctorDashboard() {
         <ProfileEditLayout
           profileForm={profileForm}
           profileSaving={profileSaving}
+          photoUploading={photoUploading}
           onChange={handleProfileChange}
           onSubmit={handleProfileSubmit}
+          onPhotoUpload={handleDoctorPhotoUpload}
         />
       )}
 
@@ -678,27 +751,52 @@ function OverviewLayout({
   );
 }
 
-function ProfileEditLayout({ profileForm, profileSaving, onChange, onSubmit }) {
+function ProfileEditLayout({
+  profileForm,
+  profileSaving,
+  photoUploading,
+  onChange,
+  onSubmit,
+  onPhotoUpload,
+}) {
   return (
     <section id="profile" className="scroll-mt-6">
       <Panel
         title="Edit Doctor Profile"
-        subtitle="This layout opens when you click the doctor profile card from the sidebar"
+        subtitle="Click the image box to browse and upload a photo from your PC"
         icon={<UserRoundCog size={20} />}
       >
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="flex flex-col gap-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center">
-            {profileForm.imageUrl ? (
-              <img
-                src={profileForm.imageUrl}
-                alt="Doctor profile preview"
-                className="h-24 w-24 rounded-3xl border border-slate-200 object-cover shadow-sm"
+            <label className="group relative grid h-24 w-24 cursor-pointer place-items-center overflow-hidden rounded-3xl border border-dashed border-slate-300 bg-white shadow-sm transition hover:border-cyan-400 hover:bg-cyan-50">
+              {profileForm.imageUrl ? (
+                <img
+                  src={profileForm.imageUrl}
+                  alt="Doctor profile preview"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-3xl font-black text-slate-400">
+                  {profileForm.fullName?.charAt(0)?.toUpperCase() || "D"}
+                </span>
+              )}
+
+              <span className="absolute inset-0 grid place-items-center bg-slate-950/50 text-white opacity-0 transition group-hover:opacity-100">
+                {photoUploading ? (
+                  <Loader2 size={24} className="animate-spin" />
+                ) : (
+                  <Camera size={24} />
+                )}
+              </span>
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={onPhotoUpload}
+                disabled={photoUploading}
+                className="hidden"
               />
-            ) : (
-              <div className="grid h-24 w-24 place-items-center rounded-3xl border border-dashed border-slate-300 bg-white text-3xl font-black text-slate-400">
-                {profileForm.fullName?.charAt(0)?.toUpperCase() || "D"}
-              </div>
-            )}
+            </label>
 
             <div>
               <h2 className="text-xl font-black text-slate-950">
@@ -708,8 +806,8 @@ function ProfileEditLayout({ profileForm, profileSaving, onChange, onSubmit }) {
                 {profileForm.specialization || "Specialization"}
               </p>
               <p className="mt-2 text-sm text-slate-500">
-                Paste an image URL for now. Direct file upload needs Cloudinary
-                upload route.
+                Click the photo box to browse image from PC. Maximum image size:
+                2MB.
               </p>
             </div>
           </div>
@@ -810,7 +908,7 @@ function ProfileEditLayout({ profileForm, profileSaving, onChange, onSubmit }) {
 
           <button
             type="submit"
-            disabled={profileSaving}
+            disabled={profileSaving || photoUploading}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {profileSaving ? (
@@ -975,7 +1073,9 @@ function AppointmentsLayout({
                       className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <FileText size={14} />
-                      {alreadyPrescribed ? "Already Prescribed" : "Create Prescription"}
+                      {alreadyPrescribed
+                        ? "Already Prescribed"
+                        : "Create Prescription"}
                     </button>
                   </div>
                 </div>
@@ -1004,7 +1104,10 @@ function PrescriptionsLayout({
   );
 
   return (
-    <section id="prescriptions" className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr] scroll-mt-6">
+    <section
+      id="prescriptions"
+      className="grid gap-6 scroll-mt-6 xl:grid-cols-[0.9fr_1.1fr]"
+    >
       <Panel
         title="Create Prescription"
         subtitle="Select appointment and create digital prescription"
@@ -1021,11 +1124,13 @@ function PrescriptionsLayout({
               const appointment = appointments.find(
                 (item) => item._id === event.target.value
               );
+
               onSelectAppointment(appointment || null);
             }}
             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-cyan-500"
           >
             <option value="">Choose a patient appointment</option>
+
             {eligibleAppointments.map((appointment) => (
               <option key={appointment._id} value={appointment._id}>
                 {appointment.patient?.name || "Patient"} -{" "}
@@ -1219,6 +1324,7 @@ function Panel({ title, subtitle, icon, children }) {
             {icon}
           </div>
         )}
+
         <div>
           <h2 className="text-xl font-black text-slate-950">{title}</h2>
           {subtitle && (
@@ -1226,6 +1332,7 @@ function Panel({ title, subtitle, icon, children }) {
           )}
         </div>
       </div>
+
       {children}
     </div>
   );
@@ -1278,6 +1385,7 @@ function FormField({
       <label className="mb-2 block text-sm font-black text-slate-700">
         {label}
       </label>
+
       <input
         type={type}
         name={name}
@@ -1303,6 +1411,7 @@ function TextAreaField({
       <label className="mb-2 block text-sm font-black text-slate-700">
         {label}
       </label>
+
       <textarea
         name={name}
         value={value || ""}
