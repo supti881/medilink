@@ -69,7 +69,7 @@ function MockPayment() {
 
       const response = await paymentApi.createMockPayment({
         appointment: selectedId,
-        paymentMethod: "mock_card",
+        paymentMethod: "mock",
       });
 
       setLastPayment(response.payment);
@@ -173,7 +173,7 @@ function MockPayment() {
                 <input
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm"
                   placeholder="4242 4242 4242 4242"
-                  readOnly
+                  
                 />
                 <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-4">
                   <LockKeyhole className="text-teal-700" size={20} />

@@ -69,6 +69,7 @@ function Register() {
         phone: formData.phone,
         role: formData.role,
       });
+      console.log("response",response)
 
       localStorage.setItem("medilink_pending_email", formData.email);
 
@@ -76,6 +77,7 @@ function Register() {
         response.message ||
           "Account created successfully. Please verify your OTP."
       );
+     
 
       if (response.devOtp) {
         setDevOtp(response.devOtp);
@@ -83,7 +85,7 @@ function Register() {
 
       setTimeout(() => {
         navigate("/otp-verification");
-      }, response.devOtp ? 2500 : 1200);
+      }, response?.devOtp ? 7000 : 1200);
 
       setFormData({
         name: "",
