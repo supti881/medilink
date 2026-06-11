@@ -27,16 +27,8 @@ function getNavItems(role) {
   if (role === "doctor") {
     return [
       { label: "Overview", to: "/doctor-dashboard", icon: Activity },
-      {
-        label: "Appointments",
-        to: "/doctor-dashboard#appointments",
-        icon: BadgeCheck,
-      },
-      {
-        label: "Prescriptions",
-        to: "/doctor-dashboard#prescriptions",
-        icon: FileCheck2,
-      },
+      { label: "Appointments", to: "/doctor-dashboard#appointments", icon: BadgeCheck },
+      { label: "Prescriptions", to: "/doctor-dashboard#prescriptions", icon: FileCheck2 },
       { label: "Find doctors", to: "/doctors", icon: Stethoscope },
     ];
   }
@@ -45,39 +37,19 @@ function getNavItems(role) {
     return [
       { label: "Overview", to: "/admin-dashboard", icon: ShieldCheck },
       { label: "Doctors", to: "/admin-dashboard#doctors", icon: Users },
-      {
-        label: "Support",
-        to: "/admin-dashboard#tickets",
-        icon: Headphones,
-      },
-      {
-        label: "Reissues",
-        to: "/admin-dashboard#reissues",
-        icon: FileCheck2,
-      },
+      { label: "Support", to: "/admin-dashboard#tickets", icon: Headphones },
+      { label: "Reissues", to: "/admin-dashboard#reissues", icon: FileCheck2 },
     ];
   }
 
   return [
     { label: "Overview", to: "/patient-dashboard", icon: Activity },
-    {
-      label: "Appointments",
-      to: "/patient-dashboard#appointments",
-      icon: BadgeCheck,
-    },
+    { label: "Appointments", to: "/patient-dashboard#appointments", icon: BadgeCheck },
     { label: "Find doctors", to: "/doctors", icon: Stethoscope },
     { label: "Payments", to: "/mock-payment", icon: CreditCard },
     { label: "Support", to: "/support-ticket", icon: Headphones },
-    {
-      label: "Reissue",
-      to: "/replacement-request",
-      icon: FileCheck2,
-    },
-    {
-      label: "Verify RX",
-      to: "/verify-prescription",
-      icon: ShieldCheck,
-    },
+    { label: "Reissue", to: "/replacement-request", icon: FileCheck2 },
+    { label: "Verify RX", to: "/verify-prescription", icon: ShieldCheck },
   ];
 }
 
@@ -99,6 +71,149 @@ const roleThemes = {
   },
 };
 
+// --- SIDEBAR COMPONENT ---
+export function Sidebar({ title, user, role, navItems, theme, onClose, isMobile }) {
+  const getFirstLetter = (name) => (name ? name.charAt(0).toUpperCase() : "U");
+
+  return (
+    <div
+      className={cx(
+        "flex h-full flex-col rounded-[24px] border border-white/[0.06] bg-[#09111e] text-white shadow-2xl relative overflow-hidden",
+        theme.glow
+      )}
+    >
+      {/* Decorative Top Ambient Light Streak */}
+      <div className="absolute -top-12 left-1/4 right-1/4 h-16 w-1/2 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 blur-xl pointer-events-none" />
+
+      {/* Header Section */}
+      <div className="p-5 border-b border-white/[0.06]">
+        <div className="flex items-center justify-between gap-2">
+          <Link to="/" className="flex items-center gap-3 group" onClick={onClose}>
+            <div
+              className={cx(
+                "grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-slate-950 shadow-md transition-transform duration-300 group-hover:scale-105 group-hover:rotate-6",
+                theme.accent
+              )}
+            >
+              <Stethoscope size={18} strokeWidth={2.5} />
+            </div>
+            <div>
+              <p className="text-base font-black tracking-tight text-white">
+                Medi<span className="text-teal-400 font-serif font-normal italic">Link</span>
+              </p>
+              <p className="text-[11px] font-semibold text-slate-400 tracking-wide truncate max-w-[150px]">
+                {title}
+              </p>
+            </div>
+          </Link>
+
+          {isMobile && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-8 w-8 place-items-center rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white transition active:scale-95"
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+
+        {/* User Account Capsule Widget */}
+        <div className="mt-5 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3.5 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-sm bg-white/10 text-white border border-white/10 shadow-inner">
+              {getFirstLetter(user?.name)}
+            </div>
+            <div className="overflow-hidden flex-1">
+              <p className="truncate text-xs font-black text-white">{user?.name || "User"}</p>
+              <p className="truncate text-[11px] font-medium text-slate-400 mt-0.5">
+                {user?.email || "No email profile"}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between border-t border-white/[0.04] pt-2.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+              Role Access
+            </span>
+            <span
+              className={cx(
+                "inline-flex rounded-md bg-gradient-to-r px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-950 shadow-sm",
+                theme.accent
+              )}
+            >
+              {user?.role || role}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Stack Links */}
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={onClose}
+              className={({ isActive }) =>
+                cx(
+                  "flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-bold transition-all relative group overflow-hidden",
+                  isActive
+                    ? "text-white bg-white/[0.06] border border-white/[0.08]"
+                    : "text-slate-400 hover:bg-white/[0.02] hover:text-white border border-transparent"
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {/* Neon Glow Side Indicator Ring */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeGlowBar"
+                      className={cx(
+                        "absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-gradient-to-b",
+                        theme.accent
+                      )}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    />
+                  )}
+
+                  <Icon
+                    size={17}
+                    strokeWidth={isActive ? 2.5 : 2}
+                    className={cx(
+                      "transition-colors duration-200",
+                      isActive ? "text-teal-400" : "text-slate-500 group-hover:text-slate-300"
+                    )}
+                  />
+                  
+                  <span className="relative z-10">{item.label}</span>
+                </>
+              )}
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      {/* Connection Indicator Footer */}
+      <div className="border-t border-white/[0.06] p-4 bg-slate-950/40 backdrop-blur-md">
+        <div className="flex items-center justify-between">
+          <p className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+            </span>
+            Core Engine Linked
+          </p>
+          <span className="text-[10px] font-mono font-medium text-slate-600">v2.4.0</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- MAIN LAYOUT COMPONENT ---
 export default function DashboardLayout({
   title,
   subtitle,
@@ -203,7 +318,7 @@ export default function DashboardLayout({
               </Link>
               <Link
                 to="/"
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white"
+                className="inline-flex items-center gap-2 rounded-xl  px-4 py-2.5 text-sm font-bold text-white"
               >
                 <ArrowLeft size={16} />
                 Exit
@@ -248,95 +363,6 @@ export default function DashboardLayout({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function Sidebar({ title, user, role, navItems, theme, onClose, isMobile }) {
-  return (
-    <div
-      className={cx(
-        "flex h-full flex-col rounded-3xl bg-slate-950 text-white",
-        theme.glow,
-        "shadow-2xl"
-      )}
-    >
-      <div className="border-b border-white/10 p-5">
-        <div className="flex items-start justify-between gap-2">
-          <Link to="/" className="flex items-center gap-3" onClick={onClose}>
-            <div
-              className={cx(
-                "grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br",
-                theme.accent
-              )}
-            >
-              <Stethoscope size={20} className="text-slate-950" />
-            </div>
-            <div>
-              <p className="text-sm font-black">
-                Medi<span className="font-serif italic font-normal">Link</span>
-              </p>
-              <p className="text-[11px] font-medium text-slate-400">{title}</p>
-            </div>
-          </Link>
-          {isMobile && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="grid h-9 w-9 place-items-center rounded-lg bg-white/10"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
-
-        <div className="mt-5 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-            Signed in
-          </p>
-          <p className="mt-1 truncate font-black">{user?.name || "User"}</p>
-          <p className="truncate text-xs text-slate-400">{user?.email}</p>
-          <span
-            className={cx(
-              "mt-3 inline-flex rounded-lg bg-gradient-to-r px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950",
-              theme.accent
-            )}
-          >
-            {user?.role || role}
-          </span>
-        </div>
-      </div>
-
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={onClose}
-              className={({ isActive }) =>
-                cx(
-                  "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition",
-                  isActive
-                    ? "bg-white text-slate-950"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white"
-                )
-              }
-            >
-              <Icon size={18} />
-              {item.label}
-            </NavLink>
-          );
-        })}
-      </nav>
-
-      <div className="border-t border-white/10 p-4">
-        <p className="flex items-center gap-2 text-[11px] font-semibold text-emerald-400">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-          MongoDB connected
-        </p>
-      </div>
     </div>
   );
 }

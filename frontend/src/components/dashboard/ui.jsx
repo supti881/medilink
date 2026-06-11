@@ -124,7 +124,7 @@ export function DataPanel({
           {actionText && actionLink && (
             <Link
               to={actionLink}
-              className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+              className="rounded-xl  px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700"
             >
               {actionText}
             </Link>
