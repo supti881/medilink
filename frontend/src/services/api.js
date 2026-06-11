@@ -97,6 +97,17 @@ export const doctorApi = {
     return request("/doctors");
   },
 
+  getMyProfile: async () => {
+    return request("/doctors/me");
+  },
+
+  updateMyProfile: async (payload) => {
+    return request("/doctors/me", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
   getById: async (doctorId) => {
     return request(`/doctors/${doctorId}`);
   },

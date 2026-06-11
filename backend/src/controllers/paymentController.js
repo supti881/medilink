@@ -12,7 +12,10 @@ const generateTransactionId = () => {
 // Create mock payment
 export const createMockPayment = async (req, res) => {
   try {
-    const { appointment, paymentMethod, transactionId, notes } = req.body;
+    const { appointment, paymentMethod } = req.body;
+    // console.log(req)
+    console.log("Body",req.body)
+    console.log("user of request",req.user)
 
     if (req.user.role !== "patient") {
       return res.status(403).json({
@@ -29,6 +32,7 @@ export const createMockPayment = async (req, res) => {
     }
 
     const appointmentData = await Appointment.findById(appointment);
+    console.log("appointmentData",appointmentData)
 
     if (!appointmentData) {
       return res.status(404).json({
@@ -61,7 +65,8 @@ export const createMockPayment = async (req, res) => {
     const existingPayment = await Payment.findOne({
       appointment: appointmentData._id,
     });
-
+    
+    console.log("existingPayment",existingPayment)
     if (existingPayment) {
       return res.status(409).json({
         success: false,
@@ -69,7 +74,28 @@ export const createMockPayment = async (req, res) => {
       });
     }
 
-    const finalTransactionId = transactionId || generateTransactionId();
+    const finalTransactionId =  generateTransactionId();
+        console.log("finalTransactionId",finalTransactionId)
+
+//         appointmentData {
+//   _id: new ObjectId('6a1d55f1d1acfd9085f7d625'),
+//   patient: new ObjectId('6a1d16072407068797af05d4'),
+//   doctor: new ObjectId('6a1403108c35909baa451dbc'),
+//   appointmentDate: 2026-06-02T18:00:00.000Z,
+//   appointmentDay: 'Wednesday',
+//   startTime: '10:00 AM',
+//   endTime: '01:00 PM',
+//   symptoms: 'headache',
+//   medicalNotes: '',
+//   consultationType: 'video',
+//   status: 'pending',
+//   paymentStatus: 'pending',
+//   paymentAmount: 750,
+//   meetingLink: '',
+//   createdAt: 2026-06-01T09:50:41.600Z,
+//   updatedAt: 2026-06-01T09:50:41.600Z,
+//   __v: 0
+// }
 
     const payment = await Payment.create({
       appointment: appointmentData._id,
@@ -80,16 +106,19 @@ export const createMockPayment = async (req, res) => {
       transactionId: finalTransactionId,
       status: "paid",
       paymentDate: new Date(),
-      notes,
+      
       gatewayResponse: {
         provider: "MediLink Mock Payment",
         verified: true,
         message: "Mock payment completed successfully",
       },
     });
+    console.log("payment",payment)
 
     appointmentData.paymentStatus = "paid";
+
     await appointmentData.save();
+    console.log(appointmentData)
 
     const populatedPayment = await Payment.findById(payment._id)
       .populate("patient", "name email phone role")
@@ -163,6 +192,7 @@ export const getMyPayments = async (req, res) => {
       payments,
     });
   } catch (error) {
+    console.log(error)
     return res.status(500).json({
       success: false,
       message: "Failed to fetch payment history",
