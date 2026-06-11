@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowLeft,
   BadgeCheck,
+  CalendarDays,
   CreditCard,
   Database,
   FileCheck2,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Stethoscope,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -44,7 +46,13 @@ function getNavItems(role) {
   if (role === "admin") {
     return [
       { label: "Overview", to: "/admin-dashboard", icon: ShieldCheck },
-      { label: "Doctors", to: "/admin-dashboard#doctors", icon: Users },
+      { label: "Doctors", to: "/admin-dashboard#doctors", icon: Stethoscope },
+      { label: "Patients", to: "/admin-dashboard#patients", icon: UserRound },
+      {
+        label: "Appointments",
+        to: "/admin-dashboard#appointments",
+        icon: CalendarDays,
+      },
       { label: "Support", to: "/admin-dashboard#tickets", icon: Headphones },
       { label: "Reissues", to: "/admin-dashboard#reissues", icon: FileCheck2 },
     ];
@@ -70,21 +78,31 @@ const roleThemes = {
     accent: "from-emerald-400 to-teal-500",
     glow: "shadow-emerald-500/20",
     badge: "text-emerald-700",
+    profileHover:
+      "hover:border-emerald-400/40 hover:bg-emerald-400/[0.06] hover:shadow-emerald-500/10",
+    profileHint: "text-emerald-300",
   },
   doctor: {
     accent: "from-cyan-400 to-blue-500",
     glow: "shadow-cyan-500/20",
     badge: "text-cyan-700",
+    profileHover:
+      "hover:border-cyan-400/40 hover:bg-cyan-400/[0.06] hover:shadow-cyan-500/10",
+    profileHint: "text-cyan-300",
   },
   admin: {
     accent: "from-violet-400 to-fuchsia-500",
     glow: "shadow-violet-500/20",
     badge: "text-violet-700",
+    profileHover:
+      "hover:border-violet-400/40 hover:bg-violet-400/[0.06] hover:shadow-violet-500/10",
+    profileHint: "text-violet-300",
   },
 };
 
 function splitPathAndHash(to) {
   const [pathname, rawHash = ""] = to.split("#");
+
   return {
     pathname,
     hash: rawHash ? `#${rawHash}` : "",
@@ -99,10 +117,26 @@ function isMenuItemActive(item, location) {
   }
 
   if (!hash) {
-    return !location.hash || location.hash === "#overview" || location.hash === "#profile";
+    return !location.hash || location.hash === "#overview";
   }
 
   return location.hash === hash;
+}
+
+function getDashboardProfileTarget(role) {
+  if (role === "doctor") return "/doctor-dashboard#profile";
+  if (role === "admin") return "/admin-dashboard#profile";
+  return "";
+}
+
+function getProfileDisplayName(role, user) {
+  const name = user?.name || "User";
+
+  if (role === "doctor") {
+    return name.startsWith("Dr.") ? name : `Dr. ${name}`;
+  }
+
+  return name;
 }
 
 function Sidebar({
@@ -124,24 +158,27 @@ function Sidebar({
 
   const profileImage = user?.imageUrl || user?.profileImage || "";
   const profileLabel =
-    user?.specialization || user?.department || user?.role || title;
+    user?.specialization ||
+    user?.department ||
+    user?.designation ||
+    user?.role ||
+    title;
 
-  const goToDoctorProfile = () => {
-    if (role !== "doctor") return;
+  const canEditProfile = role === "doctor" || role === "admin";
 
+  const goToProfile = () => {
+    if (!canEditProfile) return;
+
+    const target = getDashboardProfileTarget(role);
     onClose?.();
+    navigate(target);
 
-    if (location.pathname === "/doctor-dashboard") {
-      navigate("/doctor-dashboard#profile");
-      window.setTimeout(() => {
-        document.getElementById("profile")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 80);
-    } else {
-      navigate("/doctor-dashboard#profile");
-    }
+    window.setTimeout(() => {
+      document.getElementById("profile")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
   };
 
   const handleMenuClick = () => {
@@ -195,13 +232,13 @@ function Sidebar({
 
         <button
           type="button"
-          onClick={goToDoctorProfile}
-          disabled={role !== "doctor"}
-          title={role === "doctor" ? "Click to edit doctor profile" : undefined}
+          onClick={goToProfile}
+          disabled={!canEditProfile}
+          title={canEditProfile ? "Click to edit profile" : undefined}
           className={cx(
             "mt-5 w-full rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3.5 text-left backdrop-blur-sm transition",
-            role === "doctor"
-              ? "cursor-pointer hover:border-cyan-400/40 hover:bg-cyan-400/[0.06] hover:shadow-lg hover:shadow-cyan-500/10"
+            canEditProfile
+              ? `cursor-pointer hover:shadow-lg ${theme.profileHover}`
               : "cursor-default"
           )}
         >
@@ -220,11 +257,7 @@ function Sidebar({
 
             <div className="min-w-0 flex-1 overflow-hidden">
               <p className="truncate text-xs font-black text-white">
-                {role === "doctor" && user?.name?.startsWith("Dr.")
-                  ? user.name
-                  : role === "doctor"
-                  ? `Dr. ${user?.name || "Doctor"}`
-                  : user?.name || "User"}
+                {getProfileDisplayName(role, user)}
               </p>
               <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
                 {user?.email || "No email profile"}
@@ -246,8 +279,8 @@ function Sidebar({
             </span>
           </div>
 
-          {role === "doctor" && (
-            <p className="mt-2 text-[10px] font-bold text-cyan-300">
+          {canEditProfile && (
+            <p className={cx("mt-2 text-[10px] font-bold", theme.profileHint)}>
               Click this card to edit profile
             </p>
           )}
@@ -379,7 +412,12 @@ export default function DashboardLayout({
               </button>
 
               <div>
-                <p className={cx("text-[10px] font-black uppercase tracking-[0.35em]", theme.badge)}>
+                <p
+                  className={cx(
+                    "text-[10px] font-black uppercase tracking-[0.35em]",
+                    theme.badge
+                  )}
+                >
                   {role} · live data
                 </p>
                 <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
