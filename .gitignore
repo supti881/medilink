@@ -29,3 +29,7 @@ Thumbs.db
 
 # Editor files
 .vscode/
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep

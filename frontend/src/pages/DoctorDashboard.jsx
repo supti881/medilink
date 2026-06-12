@@ -65,6 +65,29 @@ function getActiveView(hash) {
   return "overview";
 }
 
+function removeDoctorPrefix(name = "") {
+  return String(name || "")
+    .trim()
+    .replace(/^(dr\.?\s*)+/i, "")
+    .trim();
+}
+
+function formatDoctorName(name = "Doctor") {
+  const cleanName = removeDoctorPrefix(name);
+
+  if (!cleanName || cleanName.toLowerCase() === "doctor") {
+    return "Doctor";
+  }
+
+  return `Dr. ${cleanName}`;
+}
+
+function getDoctorInitial(name = "") {
+  const cleanName = removeDoctorPrefix(name);
+
+  return cleanName.charAt(0).toUpperCase() || "D";
+}
+
 function formatDate(value) {
   if (!value) return "Not set";
 
@@ -288,9 +311,11 @@ export default function DoctorDashboard() {
   }, [fetchDashboardData]);
 
   const dashboardUser = useMemo(() => {
+    const displayName = doctorProfile?.fullName || user?.name || "Doctor";
+
     return {
       ...user,
-      name: doctorProfile?.fullName || user?.name,
+      name: formatDoctorName(displayName),
       phone: doctorProfile?.phone || user?.phone,
       imageUrl: doctorProfile?.imageUrl || profileForm.imageUrl,
       specialization: doctorProfile?.specialization,
@@ -548,7 +573,7 @@ export default function DoctorDashboard() {
 
   return (
     <DashboardLayout
-      title={`Dr. ${doctorProfile?.fullName || user?.name || "Doctor"}`}
+      title={formatDoctorName(doctorProfile?.fullName || user?.name || "Doctor")}
       subtitle="Manage doctor profile, appointments, video links and prescriptions"
       role="doctor"
       user={dashboardUser}
@@ -633,6 +658,33 @@ function MessageBox({ error, success }) {
   );
 }
 
+function ImageWithFallback({
+  imageUrl,
+  alt,
+  initial = "D",
+  imageClassName,
+  fallbackClassName,
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+
+  if (imageUrl && !imageFailed) {
+    return (
+      <img
+        src={imageUrl}
+        alt={alt}
+        onError={() => setImageFailed(true)}
+        className={imageClassName}
+      />
+    );
+  }
+
+  return <div className={fallbackClassName}>{initial}</div>;
+}
+
 function OverviewLayout({
   doctorProfile,
   appointments,
@@ -642,6 +694,8 @@ function OverviewLayout({
   prescriptions,
 }) {
   const latestAppointments = appointments.slice(0, 4);
+  const doctorName = doctorProfile?.fullName || "";
+  const doctorInitial = getDoctorInitial(doctorName);
 
   return (
     <section className="space-y-6">
@@ -678,21 +732,19 @@ function OverviewLayout({
           subtitle="Click the profile card in sidebar to edit full profile"
         >
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            {doctorProfile?.imageUrl ? (
-              <img
-                src={doctorProfile.imageUrl}
-                alt={doctorProfile.fullName}
-                className="h-24 w-24 rounded-3xl border border-slate-200 object-cover shadow-sm"
-              />
-            ) : (
-              <div className="grid h-24 w-24 place-items-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-3xl font-black text-slate-400">
-                {doctorProfile?.fullName?.charAt(0)?.toUpperCase() || "D"}
-              </div>
-            )}
+            <ImageWithFallback
+              imageUrl={doctorProfile?.imageUrl}
+              alt={formatDoctorName(doctorName || "Doctor")}
+              initial={doctorInitial}
+              imageClassName="h-24 w-24 rounded-3xl border border-slate-200 object-cover shadow-sm"
+              fallbackClassName="grid h-24 w-24 place-items-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 text-3xl font-black text-slate-400"
+            />
 
             <div className="min-w-0">
               <h2 className="text-2xl font-black text-slate-950">
-                Dr. {doctorProfile?.fullName || "Doctor profile not completed"}
+                {doctorName
+                  ? formatDoctorName(doctorName)
+                  : "Doctor profile not completed"}
               </h2>
               <p className="mt-1 font-bold text-cyan-700">
                 {doctorProfile?.specialization || "Specialization not added"}
@@ -759,6 +811,8 @@ function ProfileEditLayout({
   onSubmit,
   onPhotoUpload,
 }) {
+  const profileInitial = getDoctorInitial(profileForm.fullName);
+
   return (
     <section id="profile" className="scroll-mt-6">
       <Panel
@@ -769,17 +823,13 @@ function ProfileEditLayout({
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="flex flex-col gap-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center">
             <label className="group relative grid h-24 w-24 cursor-pointer place-items-center overflow-hidden rounded-3xl border border-dashed border-slate-300 bg-white shadow-sm transition hover:border-cyan-400 hover:bg-cyan-50">
-              {profileForm.imageUrl ? (
-                <img
-                  src={profileForm.imageUrl}
-                  alt="Doctor profile preview"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="text-3xl font-black text-slate-400">
-                  {profileForm.fullName?.charAt(0)?.toUpperCase() || "D"}
-                </span>
-              )}
+              <ImageWithFallback
+                imageUrl={profileForm.imageUrl}
+                alt="Doctor profile preview"
+                initial={profileInitial}
+                imageClassName="h-full w-full object-cover"
+                fallbackClassName="grid h-full w-full place-items-center text-3xl font-black text-slate-400"
+              />
 
               <span className="absolute inset-0 grid place-items-center bg-slate-950/50 text-white opacity-0 transition group-hover:opacity-100">
                 {photoUploading ? (
@@ -800,7 +850,9 @@ function ProfileEditLayout({
 
             <div>
               <h2 className="text-xl font-black text-slate-950">
-                Dr. {profileForm.fullName || "Doctor Name"}
+                {profileForm.fullName
+                  ? formatDoctorName(profileForm.fullName)
+                  : "Doctor Name"}
               </h2>
               <p className="mt-1 text-sm font-bold text-cyan-700">
                 {profileForm.specialization || "Specialization"}

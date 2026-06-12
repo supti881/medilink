@@ -62,6 +62,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/support-tickets", supportTicketRoutes);
 app.use("/api/replacement-requests", replacementRequestRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/uploads", express.static("uploads"));
 
 // 404 route
 app.use((req, res) => {
