@@ -1,75 +1,40 @@
-import cloudinary from "../config/cloudinary.js";
 import Doctor from "../models/Doctor.js";
-
-const uploadBufferToCloudinary = (buffer, userId) => {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: "medilink/doctors",
-        public_id: `doctor-${userId}-${Date.now()}`,
-        resource_type: "image",
-        overwrite: true,
-        transformation: [
-          {
-            width: 500,
-            height: 500,
-            crop: "fill",
-            gravity: "face",
-            quality: "auto",
-            fetch_format: "auto",
-          },
-        ],
-      },
-      (error, result) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        resolve(result);
-      }
-    );
-
-    uploadStream.end(buffer);
-  });
-};
 
 export const uploadDoctorPhoto = async (req, res) => {
   try {
-    if (!process.env.CLOUDINARY_CLOUD_NAME) {
-      return res.status(500).json({
-        success: false,
-        message: "Cloudinary configuration is missing",
-      });
-    }
-
     if (!req.file) {
       return res.status(400).json({
-        success: false,
-        message: "Please select an image file",
+        message: "No image file received. Use form field name: image.",
       });
     }
 
-    const result = await uploadBufferToCloudinary(req.file.buffer, req.user._id);
+    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/doctors/${
+      req.file.filename
+    }`;
 
     const doctor = await Doctor.findOneAndUpdate(
       { user: req.user._id },
-      { imageUrl: result.secure_url },
+      { imageUrl },
       { new: true }
     ).populate("user", "name email phone role isVerified status");
 
+    if (!doctor) {
+      return res.status(404).json({
+        message: "Doctor profile not found. Please complete doctor profile first.",
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      message: "Doctor photo uploaded successfully",
-      imageUrl: result.secure_url,
-      publicId: result.public_id,
+      message: "Doctor photo uploaded successfully.",
+      imageUrl,
       doctor,
     });
   } catch (error) {
+    console.error("Doctor photo upload error:", error);
+
     return res.status(500).json({
-      success: false,
-      message: "Failed to upload doctor photo",
-      error: error.message,
+      message: error.message || "Failed to upload doctor photo.",
     });
   }
 };
