@@ -108,6 +108,19 @@ function getUploadedImageUrl(response) {
   );
 }
 
+function formatDoctorDisplayName(name = "") {
+  const cleanName = String(name || "")
+    .trim()
+    .replace(/^(dr\.?\s*)+/i, "")
+    .trim();
+
+  if (!cleanName || cleanName.toLowerCase() === "doctor") {
+    return "Doctor";
+  }
+
+  return `Dr. ${cleanName}`;
+}
+
 function ProfileAvatar({ src, name, editable = false }) {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -283,8 +296,7 @@ function PatientDashboard() {
   );
 
   const activeTickets = tickets.filter(
-    (ticket) =>
-      ticket.status === "open" || ticket.status === "in_progress"
+    (ticket) => ticket.status === "open" || ticket.status === "in_progress"
   );
 
   const pendingAppointments = appointments.filter(
@@ -626,10 +638,10 @@ function OverviewLayout({
                   <div className="flex justify-between gap-3">
                     <div>
                       <p className="font-black text-slate-950">
-                        Dr.{" "}
-                        {appointment.doctor?.fullName ||
-                          appointment.doctor?.user?.name ||
-                          "Doctor"}
+                        {formatDoctorDisplayName(
+                          appointment.doctor?.fullName ||
+                            appointment.doctor?.user?.name
+                        )}
                       </p>
                       <p className="text-sm font-semibold text-emerald-700">
                         {appointment.doctor?.specialization || "Consultation"}
@@ -1061,10 +1073,10 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-black text-slate-950">
-                      Dr.{" "}
-                      {appointment.doctor?.fullName ||
-                        appointment.doctor?.user?.name ||
-                        "Doctor"}
+                      {formatDoctorDisplayName(
+                        appointment.doctor?.fullName ||
+                          appointment.doctor?.user?.name
+                      )}
                     </p>
 
                     <p className="text-sm font-semibold text-emerald-700">
@@ -1134,7 +1146,9 @@ function DoctorsLayout({ doctors, onBook }) {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="truncate text-lg font-black text-slate-950">
-                      {doctor.fullName}
+                      {formatDoctorDisplayName(
+                        doctor.fullName || doctor.user?.name
+                      )}
                     </p>
                     <p className="mt-1 text-sm font-bold text-emerald-700">
                       {doctor.specialization || doctor.department || "Doctor"}
