@@ -8,7 +8,7 @@ const router = express.Router();
 router.post(
   "/doctor-photo",
   protect,
-  authorizeRoles("doctor"),
+  authorizeRoles("patient", "doctor", "admin"),
   uploadImage.single("image"),
   uploadDoctorPhoto
 );

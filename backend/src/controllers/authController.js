@@ -8,6 +8,37 @@ const createToken = (userId) => {
   });
 };
 
+const buildUserPayload = (user) => {
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone || "",
+    role: user.role,
+    profileImage: user.profileImage || "",
+    imageUrl: user.profileImage || "",
+    gender: user.gender || "",
+    dateOfBirth: user.dateOfBirth || null,
+    bloodGroup: user.bloodGroup || "",
+    address: user.address || "",
+    emergencyContactName: user.emergencyContactName || "",
+    emergencyContactPhone: user.emergencyContactPhone || "",
+    medicalNotes: user.medicalNotes || "",
+    isVerified: user.isVerified,
+    status: user.status,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+};
+
+const normalizeText = (value) => {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+};
+
 // Register new user
 export const registerUser = async (req, res) => {
   try {
@@ -47,15 +78,7 @@ export const registerUser = async (req, res) => {
       success: true,
       message: "User registered successfully. OTP generated for verification.",
       devOtp: otp,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-        status: user.status,
-      },
+      user: buildUserPayload(user),
     });
   } catch (error) {
     return res.status(500).json({
@@ -123,15 +146,7 @@ export const loginUser = async (req, res) => {
       success: true,
       message: "Login successful",
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-        status: user.status,
-      },
+      user: buildUserPayload(user),
     });
   } catch (error) {
     return res.status(500).json({
@@ -200,14 +215,7 @@ export const verifyOtp = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Account verified successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isVerified: user.isVerified,
-        status: user.status,
-      },
+      user: buildUserPayload(user),
     });
   } catch (error) {
     return res.status(500).json({
@@ -226,16 +234,7 @@ export const getCurrentUser = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Current user fetched successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-        status: user.status,
-        createdAt: user.createdAt,
-      },
+      user: buildUserPayload(user),
     });
   } catch (error) {
     return res.status(500).json({
@@ -245,6 +244,123 @@ export const getCurrentUser = async (req, res) => {
     });
   }
 };
+
+// Update current logged-in user profile
+export const updateCurrentUserProfile = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized request",
+      });
+    }
+
+    const {
+      name,
+      phone,
+      profileImage,
+      gender,
+      dateOfBirth,
+      bloodGroup,
+      address,
+      emergencyContactName,
+      emergencyContactPhone,
+      medicalNotes,
+    } = req.body;
+
+    const updateData = {};
+
+    if (name !== undefined) {
+      const cleanName = normalizeText(name);
+
+      if (cleanName.length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Name must be at least 2 characters",
+        });
+      }
+
+      updateData.name = cleanName;
+    }
+
+    if (phone !== undefined) {
+      updateData.phone = normalizeText(phone);
+    }
+
+    if (profileImage !== undefined) {
+      updateData.profileImage = normalizeText(profileImage);
+    }
+
+    if (gender !== undefined) {
+      const cleanGender = normalizeText(gender).toLowerCase();
+      updateData.gender = cleanGender;
+    }
+
+    if (dateOfBirth !== undefined) {
+      if (!dateOfBirth) {
+        updateData.dateOfBirth = null;
+      } else {
+        const parsedDate = new Date(dateOfBirth);
+
+        if (Number.isNaN(parsedDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Please provide a valid date of birth",
+          });
+        }
+
+        updateData.dateOfBirth = parsedDate;
+      }
+    }
+
+    if (bloodGroup !== undefined) {
+      updateData.bloodGroup = normalizeText(bloodGroup);
+    }
+
+    if (address !== undefined) {
+      updateData.address = normalizeText(address);
+    }
+
+    if (emergencyContactName !== undefined) {
+      updateData.emergencyContactName = normalizeText(emergencyContactName);
+    }
+
+    if (emergencyContactPhone !== undefined) {
+      updateData.emergencyContactPhone = normalizeText(emergencyContactPhone);
+    }
+
+    if (medicalNotes !== undefined) {
+      updateData.medicalNotes = normalizeText(medicalNotes);
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: buildUserPayload(updatedUser),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Profile update failed",
+      error: error.message,
+    });
+  }
+};
+
 // Logout user
 export const logoutUser = async (req, res) => {
   try {

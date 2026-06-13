@@ -115,6 +115,13 @@ export const authApi = {
     return request("/auth/me");
   },
 
+  updateProfile: async (payload) => {
+    return request("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
   logout: async () => {
     const data = await request("/auth/logout", {
       method: "POST",

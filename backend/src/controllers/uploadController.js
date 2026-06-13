@@ -1,40 +1,138 @@
+import path from "path";
 import Doctor from "../models/Doctor.js";
+import User from "../models/User.js";
+
+const buildUserPayload = (user) => {
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone || "",
+    role: user.role,
+    profileImage: user.profileImage || "",
+    imageUrl: user.profileImage || "",
+    gender: user.gender || "",
+    dateOfBirth: user.dateOfBirth || null,
+    bloodGroup: user.bloodGroup || "",
+    address: user.address || "",
+    emergencyContactName: user.emergencyContactName || "",
+    emergencyContactPhone: user.emergencyContactPhone || "",
+    medicalNotes: user.medicalNotes || "",
+    isVerified: user.isVerified,
+    status: user.status,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+};
+
+const getUploadedFileUrl = (file) => {
+  if (!file) return "";
+
+  const normalizedPath = String(file.path || "").replace(/\\/g, "/");
+
+  if (normalizedPath.includes("/uploads/")) {
+    return normalizedPath.slice(normalizedPath.indexOf("/uploads/"));
+  }
+
+  if (normalizedPath.startsWith("uploads/")) {
+    return `/${normalizedPath}`;
+  }
+
+  if (file.destination && file.filename) {
+    const destination = String(file.destination).replace(/\\/g, "/");
+    const uploadIndex = destination.indexOf("uploads");
+
+    if (uploadIndex !== -1) {
+      const relativeDestination = destination.slice(uploadIndex);
+      return `/${path.posix.join(relativeDestination, file.filename)}`;
+    }
+  }
+
+  if (file.filename) {
+    return `/uploads/${file.filename}`;
+  }
+
+  return "";
+};
 
 export const uploadDoctorPhoto = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
-        message: "No image file received. Use form field name: image.",
+        success: false,
+        message: "No image file uploaded",
       });
     }
 
-    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/doctors/${
-      req.file.filename
-    }`;
+    const imageUrl = getUploadedFileUrl(req.file);
 
-    const doctor = await Doctor.findOneAndUpdate(
-      { user: req.user._id },
-      { imageUrl },
-      { new: true }
-    ).populate("user", "name email phone role isVerified status");
-
-    if (!doctor) {
-      return res.status(404).json({
-        message: "Doctor profile not found. Please complete doctor profile first.",
+    if (!imageUrl) {
+      return res.status(500).json({
+        success: false,
+        message: "Image uploaded but file path could not be generated",
       });
+    }
+
+    const userId = req.user?._id;
+    const userRole = req.user?.role;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized request",
+      });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        profileImage: imageUrl,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User profile not found",
+      });
+    }
+
+    let updatedDoctor = null;
+
+    if (userRole === "doctor") {
+      updatedDoctor = await Doctor.findOneAndUpdate(
+        { user: userId },
+        {
+          imageUrl,
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
     }
 
     return res.status(200).json({
       success: true,
-      message: "Doctor photo uploaded successfully.",
+      message:
+        userRole === "doctor"
+          ? "Doctor profile photo uploaded successfully"
+          : "Profile photo uploaded successfully",
       imageUrl,
-      doctor,
+      url: imageUrl,
+      path: imageUrl,
+      user: buildUserPayload(updatedUser),
+      doctor: updatedDoctor,
     });
   } catch (error) {
-    console.error("Doctor photo upload error:", error);
-
     return res.status(500).json({
-      message: error.message || "Failed to upload doctor photo.",
+      success: false,
+      message: "Profile photo upload failed",
+      error: error.message,
     });
   }
 };
