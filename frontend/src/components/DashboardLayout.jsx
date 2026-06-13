@@ -25,6 +25,23 @@ function cx(...classes) {
   return classes.filter(Boolean).join(" ");
 }
 
+function removeDoctorPrefix(name = "") {
+  return String(name || "")
+    .trim()
+    .replace(/^(dr\.?\s*)+/i, "")
+    .trim();
+}
+
+function formatDoctorName(name = "Doctor") {
+  const cleanName = removeDoctorPrefix(name);
+
+  if (!cleanName || cleanName.toLowerCase() === "doctor") {
+    return "Doctor";
+  }
+
+  return `Dr. ${cleanName}`;
+}
+
 function getNavItems(role) {
   if (role === "doctor") {
     return [
@@ -133,22 +150,11 @@ function getDashboardProfileTarget(role) {
   return "";
 }
 
-function removeDoctorPrefix(name = "") {
-  return String(name || "")
-    .trim()
-    .replace(/^(dr\.?\s*)+/i, "")
-    .trim();
-}
-
 function getProfileDisplayName(role, user) {
   const name = user?.name || "User";
 
   if (role === "doctor") {
-    const cleanName = removeDoctorPrefix(name);
-
-    return cleanName && cleanName.toLowerCase() !== "doctor"
-      ? `Dr. ${cleanName}`
-      : "Doctor";
+    return formatDoctorName(name);
   }
 
   return name;
@@ -168,7 +174,10 @@ function Sidebar({
 
   const getFirstLetter = (name) => {
     if (!name) return "U";
-    return name.charAt(0).toUpperCase();
+
+    const cleanName = role === "doctor" ? removeDoctorPrefix(name) : name;
+
+    return cleanName.charAt(0).toUpperCase() || "U";
   };
 
   const profileImage = user?.imageUrl || user?.profileImage || "";
@@ -420,7 +429,7 @@ export default function DashboardLayout({
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden"
+                className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
                 aria-label="Open menu"
               >
                 <Menu size={20} />
@@ -471,7 +480,7 @@ export default function DashboardLayout({
 
               <Link
                 to="/"
-                className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 sm:inline-flex"
+                className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:border-cyan-200 hover:text-cyan-700 sm:inline-flex"
               >
                 <Home size={16} />
                 Home
@@ -479,7 +488,7 @@ export default function DashboardLayout({
 
               <Link
                 to="/"
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800"
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-100 hover:text-red-800"
               >
                 <ArrowLeft size={16} />
                 Exit
