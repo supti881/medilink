@@ -69,6 +69,38 @@ const appointmentSchema = new mongoose.Schema(
       default: 0,
     },
 
+    platformFee: {
+      type: Number,
+      default: 0,
+    },
+
+    doctorEarning: {
+      type: Number,
+      default: 0,
+    },
+
+    earningStatus: {
+      type: String,
+      enum: ["not_ready", "released", "refunded"],
+      default: "not_ready",
+    },
+
+    earningReleased: {
+      type: Boolean,
+      default: false,
+    },
+
+    earningReleasedAt: {
+      type: Date,
+      default: null,
+    },
+
+    paymentReference: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     meetingLink: {
       type: String,
       trim: true,

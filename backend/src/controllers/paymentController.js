@@ -1,6 +1,11 @@
 import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
 import Payment from "../models/Payment.js";
+import DoctorWallet from "../models/DoctorWallet.js";
+import PaymentTransaction from "../models/PaymentTransaction.js";
+
+const PLATFORM_COMMISSION_PERCENTAGE =
+  Number(process.env.PLATFORM_COMMISSION_PERCENTAGE) || 10;
 
 const generateTransactionId = () => {
   const timestamp = Date.now();
@@ -9,13 +14,118 @@ const generateTransactionId = () => {
   return `ML-PAY-${timestamp}-${randomNumber}`;
 };
 
-// Create mock payment
+function calculateDoctorEarning(amount = 0) {
+  const safeAmount = Math.max(Number(amount) || 0, 0);
+  const platformFee = Math.round(
+    (safeAmount * PLATFORM_COMMISSION_PERCENTAGE) / 100
+  );
+  const doctorEarning = Math.max(safeAmount - platformFee, 0);
+
+  return {
+    amount: safeAmount,
+    platformFee,
+    doctorEarning,
+  };
+}
+
+async function releaseDoctorEarningIfReady(appointment) {
+  if (!appointment) return null;
+
+  const isReady =
+    appointment.status === "completed" &&
+    appointment.paymentStatus === "paid" &&
+    !appointment.earningReleased;
+
+  if (!isReady) {
+    return null;
+  }
+
+  const { amount, platformFee, doctorEarning } = calculateDoctorEarning(
+    appointment.paymentAmount
+  );
+
+  if (amount <= 0 || doctorEarning <= 0) {
+    return null;
+  }
+
+  const releasedAppointment = await Appointment.findOneAndUpdate(
+    {
+      _id: appointment._id,
+      status: "completed",
+      paymentStatus: "paid",
+      earningReleased: { $ne: true },
+    },
+    {
+      $set: {
+        platformFee,
+        doctorEarning,
+        earningStatus: "released",
+        earningReleased: true,
+        earningReleasedAt: new Date(),
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  if (!releasedAppointment) {
+    return null;
+  }
+
+  await DoctorWallet.findOneAndUpdate(
+    {
+      doctor: releasedAppointment.doctor,
+    },
+    {
+      $setOnInsert: {
+        doctor: releasedAppointment.doctor,
+      },
+      $inc: {
+        totalEarned: doctorEarning,
+        availableBalance: doctorEarning,
+        platformFeeTotal: platformFee,
+        totalPaidAppointments: 1,
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+    }
+  );
+
+  await PaymentTransaction.findOneAndUpdate(
+    {
+      appointment: releasedAppointment._id,
+    },
+    {
+      $setOnInsert: {
+        patient: releasedAppointment.patient,
+        doctor: releasedAppointment.doctor,
+        appointment: releasedAppointment._id,
+        amount,
+        platformFee,
+        doctorAmount: doctorEarning,
+        paymentMethod: "mock",
+        status: "released",
+        reference:
+          releasedAppointment.paymentReference ||
+          `MEDILINK-${releasedAppointment._id}`,
+        releasedAt: new Date(),
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+    }
+  );
+
+  return releasedAppointment;
+}
+
 export const createMockPayment = async (req, res) => {
   try {
     const { appointment, paymentMethod } = req.body;
-    // console.log(req)
-    console.log("Body",req.body)
-    console.log("user of request",req.user)
 
     if (req.user.role !== "patient") {
       return res.status(403).json({
@@ -32,7 +142,6 @@ export const createMockPayment = async (req, res) => {
     }
 
     const appointmentData = await Appointment.findById(appointment);
-    console.log("appointmentData",appointmentData)
 
     if (!appointmentData) {
       return res.status(404).json({
@@ -65,8 +174,7 @@ export const createMockPayment = async (req, res) => {
     const existingPayment = await Payment.findOne({
       appointment: appointmentData._id,
     });
-    
-    console.log("existingPayment",existingPayment)
+
     if (existingPayment) {
       return res.status(409).json({
         success: false,
@@ -74,51 +182,37 @@ export const createMockPayment = async (req, res) => {
       });
     }
 
-    const finalTransactionId =  generateTransactionId();
-        console.log("finalTransactionId",finalTransactionId)
+    const finalTransactionId = generateTransactionId();
 
-//         appointmentData {
-//   _id: new ObjectId('6a1d55f1d1acfd9085f7d625'),
-//   patient: new ObjectId('6a1d16072407068797af05d4'),
-//   doctor: new ObjectId('6a1403108c35909baa451dbc'),
-//   appointmentDate: 2026-06-02T18:00:00.000Z,
-//   appointmentDay: 'Wednesday',
-//   startTime: '10:00 AM',
-//   endTime: '01:00 PM',
-//   symptoms: 'headache',
-//   medicalNotes: '',
-//   consultationType: 'video',
-//   status: 'pending',
-//   paymentStatus: 'pending',
-//   paymentAmount: 750,
-//   meetingLink: '',
-//   createdAt: 2026-06-01T09:50:41.600Z,
-//   updatedAt: 2026-06-01T09:50:41.600Z,
-//   __v: 0
-// }
+    const { amount, platformFee, doctorEarning } = calculateDoctorEarning(
+      appointmentData.paymentAmount
+    );
 
     const payment = await Payment.create({
       appointment: appointmentData._id,
       patient: appointmentData.patient,
       doctor: appointmentData.doctor,
-      amount: appointmentData.paymentAmount,
+      amount,
       paymentMethod: paymentMethod || "mock",
       transactionId: finalTransactionId,
       status: "paid",
       paymentDate: new Date(),
-      
+
       gatewayResponse: {
         provider: "MediLink Mock Payment",
         verified: true,
         message: "Mock payment completed successfully",
       },
     });
-    console.log("payment",payment)
 
     appointmentData.paymentStatus = "paid";
+    appointmentData.paymentReference = finalTransactionId;
+    appointmentData.platformFee = platformFee;
+    appointmentData.doctorEarning = doctorEarning;
 
     await appointmentData.save();
-    console.log(appointmentData)
+
+    await releaseDoctorEarningIfReady(appointmentData);
 
     const populatedPayment = await Payment.findById(payment._id)
       .populate("patient", "name email phone role")
@@ -145,7 +239,6 @@ export const createMockPayment = async (req, res) => {
   }
 };
 
-// Get logged-in user's payment history
 export const getMyPayments = async (req, res) => {
   try {
     let filter = {};
@@ -170,10 +263,6 @@ export const getMyPayments = async (req, res) => {
       filter.doctor = doctorProfile._id;
     }
 
-    if (req.user.role === "admin") {
-      // Admin sees all payments
-    }
-
     const payments = await Payment.find(filter)
       .populate("patient", "name email phone role")
       .populate({
@@ -192,7 +281,6 @@ export const getMyPayments = async (req, res) => {
       payments,
     });
   } catch (error) {
-    console.log(error)
     return res.status(500).json({
       success: false,
       message: "Failed to fetch payment history",
@@ -201,7 +289,6 @@ export const getMyPayments = async (req, res) => {
   }
 };
 
-// Get single payment by ID
 export const getPaymentById = async (req, res) => {
   try {
     if (req.params.id === "my") {

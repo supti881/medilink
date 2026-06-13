@@ -203,6 +203,32 @@ export const paymentApi = {
   getById: async (paymentId) => {
     return request(`/payments/${paymentId}`);
   },
+
+  getDoctorPaymentSummary: async () => {
+    return request("/payments/doctor/summary");
+  },
+
+  createPayoutRequest: async (payload) => {
+    return request("/payments/doctor/payout-request", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getMyPayoutRequests: async () => {
+    return request("/payments/doctor/payout-requests");
+  },
+
+  getAllPayoutRequests: async () => {
+    return request("/payments/admin/payout-requests");
+  },
+
+  updatePayoutRequestStatus: async (payoutRequestId, payload) => {
+    return request(`/payments/admin/payout-requests/${payoutRequestId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export const supportTicketApi = {
