@@ -16,13 +16,24 @@ import {
   ShieldCheck,
   Stethoscope,
   UserRound,
-  Users,
   X,
 } from "lucide-react";
 import { formatDateTime } from "./dashboard/ui";
 
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
+).replace(/\/api\/?$/, "");
+
 function cx(...classes) {
   return classes.filter(Boolean).join(" ");
+}
+
+function getMediaUrl(value = "") {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (value.startsWith("data:")) return value;
+  if (value.startsWith("/")) return `${API_ORIGIN}${value}`;
+  return `${API_ORIGIN}/${value}`;
 }
 
 function removeDoctorPrefix(name = "") {
@@ -81,16 +92,21 @@ function getNavItems(role) {
 
   return [
     { label: "Overview", to: "/patient-dashboard", icon: Activity },
+    { label: "Profile", to: "/patient-dashboard#profile", icon: UserRound },
     {
       label: "Appointments",
       to: "/patient-dashboard#appointments",
       icon: BadgeCheck,
     },
-    { label: "Find doctors", to: "/doctors", icon: Stethoscope },
-    { label: "Payments", to: "/mock-payment", icon: CreditCard },
-    { label: "Support", to: "/support-ticket", icon: Headphones },
-    { label: "Reissue", to: "/replacement-request", icon: FileCheck2 },
-    { label: "Verify RX", to: "/verify-prescription", icon: ShieldCheck },
+    { label: "Find doctors", to: "/patient-dashboard#doctors", icon: Stethoscope },
+    { label: "Payments", to: "/patient-dashboard#payments", icon: CreditCard },
+    { label: "Support", to: "/patient-dashboard#support", icon: Headphones },
+    { label: "Reissue", to: "/patient-dashboard#reissue", icon: FileCheck2 },
+    {
+      label: "Verify RX",
+      to: "/patient-dashboard#verify-rx",
+      icon: ShieldCheck,
+    },
   ];
 }
 
@@ -147,7 +163,7 @@ function isMenuItemActive(item, location) {
 function getDashboardProfileTarget(role) {
   if (role === "doctor") return "/doctor-dashboard#profile";
   if (role === "admin") return "/admin-dashboard#profile";
-  return "";
+  return "/patient-dashboard#profile";
 }
 
 function getProfileDisplayName(role, user) {
@@ -171,6 +187,11 @@ function Sidebar({
   location,
 }) {
   const navigate = useNavigate();
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [user?.imageUrl, user?.profileImage]);
 
   const getFirstLetter = (name) => {
     if (!name) return "U";
@@ -180,7 +201,9 @@ function Sidebar({
     return cleanName.charAt(0).toUpperCase() || "U";
   };
 
-  const profileImage = user?.imageUrl || user?.profileImage || "";
+  const rawProfileImage = user?.imageUrl || user?.profileImage || "";
+  const profileImage = getMediaUrl(rawProfileImage);
+
   const profileLabel =
     user?.specialization ||
     user?.department ||
@@ -188,7 +211,8 @@ function Sidebar({
     user?.role ||
     title;
 
-  const canEditProfile = role === "doctor" || role === "admin";
+  const canEditProfile =
+    role === "doctor" || role === "admin" || role === "patient";
 
   const goToProfile = () => {
     if (!canEditProfile) return;
@@ -216,11 +240,44 @@ function Sidebar({
         theme.glow
       )}
     >
+      <style>
+        {`
+          .medilink-sidebar-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(34, 211, 238, 0.7) rgba(15, 23, 42, 0.35);
+          }
+
+          .medilink-sidebar-scrollbar::-webkit-scrollbar {
+            width: 8px;
+          }
+
+          .medilink-sidebar-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.45);
+            border-radius: 999px;
+            margin: 12px 0;
+          }
+
+          .medilink-sidebar-scrollbar::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(34, 211, 238, 0.9), rgba(16, 185, 129, 0.9));
+            border-radius: 999px;
+            border: 2px solid rgba(9, 17, 30, 0.95);
+          }
+
+          .medilink-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, rgba(103, 232, 249, 1), rgba(52, 211, 153, 1));
+          }
+        `}
+      </style>
+
       <div className="pointer-events-none absolute -top-12 left-1/4 right-1/4 h-16 w-1/2 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 blur-xl" />
 
       <div className="border-b border-white/[0.06] p-5">
         <div className="flex items-center justify-between gap-2">
-          <Link to="/" className="group flex items-center gap-3" onClick={onClose}>
+          <Link
+            to="/"
+            className="group flex items-center gap-3"
+            onClick={onClose}
+          >
             <div
               className={cx(
                 "grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-slate-950 shadow-md transition-transform duration-300 group-hover:scale-105 group-hover:rotate-6",
@@ -267,10 +324,11 @@ function Sidebar({
           )}
         >
           <div className="flex items-center gap-3">
-            {profileImage ? (
+            {profileImage && !imageFailed ? (
               <img
                 src={profileImage}
                 alt={user?.name || "Profile"}
+                onError={() => setImageFailed(true)}
                 className="h-10 w-10 shrink-0 rounded-xl border border-white/10 object-cover shadow-inner"
               />
             ) : (
@@ -311,7 +369,7 @@ function Sidebar({
         </button>
       </div>
 
-      <nav className="custom-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
+      <nav className="medilink-sidebar-scrollbar flex-1 space-y-1 overflow-y-auto p-3 pr-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isMenuItemActive(item, location);

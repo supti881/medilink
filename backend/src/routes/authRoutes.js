@@ -4,6 +4,7 @@ import {
   loginUser,
   logoutUser,
   registerUser,
+  updateCurrentUserProfile,
   verifyOtp,
 } from "../controllers/authController.js";
 import { authorizeRoles, protect } from "../middlewares/authMiddleware.js";
@@ -15,7 +16,8 @@ router.post("/login", loginUser);
 router.post("/logout", logoutUser);
 router.post("/verify-otp", verifyOtp);
 
-router.get("/me",protect, getCurrentUser);
+router.get("/me", protect, getCurrentUser);
+router.patch("/profile", protect, updateCurrentUserProfile);
 
 // Test protected role route
 router.get("/admin-only", protect, authorizeRoles("admin"), (req, res) => {

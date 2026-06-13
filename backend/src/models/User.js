@@ -38,6 +38,53 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    profileImage: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    gender: {
+      type: String,
+      enum: ["", "male", "female", "other"],
+      default: "",
+    },
+
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+
+    bloodGroup: {
+      type: String,
+      enum: ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+      default: "",
+    },
+
+    address: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    emergencyContactName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    emergencyContactPhone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    medicalNotes: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     isVerified: {
       type: Boolean,
       default: false,
@@ -64,7 +111,6 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Hash password before saving user
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) {
     return;
@@ -74,7 +120,6 @@ userSchema.pre("save", async function () {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Compare entered password with hashed password
 userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
