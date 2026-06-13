@@ -39,7 +39,11 @@ function getNavItems(role) {
         to: "/doctor-dashboard#prescriptions",
         icon: FileCheck2,
       },
-      { label: "Find doctors", to: "/doctors", icon: Stethoscope },
+      {
+        label: "Payments",
+        to: "/doctor-dashboard#payments",
+        icon: CreditCard,
+      },
     ];
   }
 
@@ -129,11 +133,22 @@ function getDashboardProfileTarget(role) {
   return "";
 }
 
+function removeDoctorPrefix(name = "") {
+  return String(name || "")
+    .trim()
+    .replace(/^(dr\.?\s*)+/i, "")
+    .trim();
+}
+
 function getProfileDisplayName(role, user) {
   const name = user?.name || "User";
 
   if (role === "doctor") {
-    return name.startsWith("Dr.") ? name : `Dr. ${name}`;
+    const cleanName = removeDoctorPrefix(name);
+
+    return cleanName && cleanName.toLowerCase() !== "doctor"
+      ? `Dr. ${cleanName}`
+      : "Doctor";
   }
 
   return name;

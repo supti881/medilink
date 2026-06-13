@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
+  AlertCircle,
+  Banknote,
+  Bell,
   CalendarDays,
   Camera,
   CheckCircle2,
   Clock,
+  CreditCard,
   ExternalLink,
   FileText,
   Loader2,
@@ -13,11 +17,13 @@ import {
   Stethoscope,
   UserRoundCog,
   Video,
+  Wallet,
 } from "lucide-react";
 import {
   appointmentApi,
   authApi,
   doctorApi,
+  paymentApi,
   prescriptionApi,
   uploadApi,
 } from "../services/api";
@@ -58,10 +64,21 @@ const emptyPrescriptionForm = {
   followUpDate: "",
 };
 
+const emptyPayoutForm = {
+  amount: "",
+  method: "bkash",
+  accountNumber: "",
+  accountHolderName: "",
+  bankName: "",
+  branchName: "",
+  note: "",
+};
+
 function getActiveView(hash) {
   if (hash === "#profile") return "profile";
   if (hash === "#appointments") return "appointments";
   if (hash === "#prescriptions") return "prescriptions";
+  if (hash === "#payments") return "payments";
   return "overview";
 }
 
@@ -110,18 +127,82 @@ function formatDateTime(value) {
   });
 }
 
+function normalizeText(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isTodayDate(value) {
+  if (!value) return false;
+
+  const target = new Date(value);
+
+  if (Number.isNaN(target.getTime())) return false;
+
+  const today = new Date();
+
+  return (
+    target.getFullYear() === today.getFullYear() &&
+    target.getMonth() === today.getMonth() &&
+    target.getDate() === today.getDate()
+  );
+}
+
+function isPaidAppointment(appointment) {
+  const paymentStatus = normalizeText(appointment?.paymentStatus);
+
+  return ["paid", "completed", "success", "successful", "waived"].includes(
+    paymentStatus
+  );
+}
+
+function isCancelledAppointment(appointment) {
+  const status = normalizeText(appointment?.status);
+
+  return ["cancelled", "rejected"].includes(status);
+}
+
+function getAppointmentFee(appointment, doctorProfile) {
+  const possibleAmount =
+    appointment?.paymentAmount ??
+    appointment?.consultationFee ??
+    appointment?.fee ??
+    appointment?.amount ??
+    appointment?.payment?.amount ??
+    doctorProfile?.consultationFee ??
+    0;
+
+  return Number(possibleAmount) || 0;
+}
+
+function formatCurrency(value) {
+  return `৳${Number(value || 0).toLocaleString("en-US")}`;
+}
+
 function statusClass(status = "") {
   const normalized = String(status).toLowerCase();
 
-  if (normalized === "approved" || normalized === "completed") {
+  if (
+    normalized === "approved" ||
+    normalized === "completed" ||
+    normalized === "paid" ||
+    normalized === "released"
+  ) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
-  if (normalized === "pending" || normalized === "submitted") {
+  if (
+    normalized === "pending" ||
+    normalized === "submitted" ||
+    normalized === "requested"
+  ) {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
-  if (normalized === "cancelled" || normalized === "rejected") {
+  if (
+    normalized === "cancelled" ||
+    normalized === "rejected" ||
+    normalized === "failed"
+  ) {
     return "border-red-200 bg-red-50 text-red-700";
   }
 
@@ -231,10 +312,16 @@ export default function DoctorDashboard() {
   const [appointments, setAppointments] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
 
+  const [paymentSummary, setPaymentSummary] = useState(null);
+  const [paymentTransactions, setPaymentTransactions] = useState([]);
+  const [payoutRequests, setPayoutRequests] = useState([]);
+
   const [profileForm, setProfileForm] = useState(emptyProfileForm);
   const [prescriptionForm, setPrescriptionForm] = useState(
     emptyPrescriptionForm
   );
+  const [payoutForm, setPayoutForm] = useState(emptyPayoutForm);
+
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [meetingLinks, setMeetingLinks] = useState({});
 
@@ -243,6 +330,7 @@ export default function DoctorDashboard() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
   const [lastSynced, setLastSynced] = useState(null);
 
   const [error, setError] = useState("");
@@ -268,12 +356,17 @@ export default function DoctorDashboard() {
           return;
         }
 
-        const [doctorResponse, appointmentResponse, prescriptionResponse] =
-          await Promise.all([
-            doctorApi.getMyProfile(),
-            appointmentApi.getDoctorAppointments(),
-            prescriptionApi.getMyPrescriptions(),
-          ]);
+        const [
+          doctorResponse,
+          appointmentResponse,
+          prescriptionResponse,
+          paymentResponse,
+        ] = await Promise.all([
+          doctorApi.getMyProfile(),
+          appointmentApi.getDoctorAppointments(),
+          prescriptionApi.getMyPrescriptions(),
+          paymentApi.getDoctorPaymentSummary().catch(() => null),
+        ]);
 
         const profile = doctorResponse.doctor || null;
         const appointmentList = appointmentResponse.appointments || [];
@@ -283,6 +376,11 @@ export default function DoctorDashboard() {
         setProfileForm(buildProfileForm(profile, currentUser));
         setAppointments(appointmentList);
         setPrescriptions(prescriptionResponse.prescriptions || []);
+
+        setPaymentSummary(paymentResponse?.summary || null);
+        setPaymentTransactions(paymentResponse?.transactions || []);
+        setPayoutRequests(paymentResponse?.payoutRequests || []);
+
         setMeetingLinks(
           appointmentList.reduce((acc, appointment) => {
             acc[appointment._id] = appointment.meetingLink || "";
@@ -324,15 +422,46 @@ export default function DoctorDashboard() {
   }, [doctorProfile, profileForm.imageUrl, user]);
 
   const pendingAppointments = appointments.filter(
-    (appointment) => appointment.status === "pending"
+    (appointment) => normalizeText(appointment.status) === "pending"
   );
 
   const approvedAppointments = appointments.filter(
-    (appointment) => appointment.status === "approved"
+    (appointment) => normalizeText(appointment.status) === "approved"
   );
 
   const completedAppointments = appointments.filter(
-    (appointment) => appointment.status === "completed"
+    (appointment) => normalizeText(appointment.status) === "completed"
+  );
+
+  const todayAppointments = appointments.filter((appointment) =>
+    isTodayDate(appointment.appointmentDate)
+  );
+
+  const missingMeetingLinkAppointments = appointments.filter((appointment) => {
+    const status = normalizeText(appointment.status);
+
+    return (
+      ["approved", "pending"].includes(status) &&
+      !appointment.meetingLink &&
+      !meetingLinks[appointment._id]
+    );
+  });
+
+  const paidAppointments = appointments.filter(isPaidAppointment);
+
+  const pendingPaymentAppointments = appointments.filter((appointment) => {
+    return !isPaidAppointment(appointment) && !isCancelledAppointment(appointment);
+  });
+
+  const totalEarnings = paidAppointments.reduce((total, appointment) => {
+    return total + getAppointmentFee(appointment, doctorProfile);
+  }, 0);
+
+  const pendingEarnings = pendingPaymentAppointments.reduce(
+    (total, appointment) => {
+      return total + getAppointmentFee(appointment, doctorProfile);
+    },
+    0
   );
 
   const hasPrescriptionForAppointment = (appointmentId) => {
@@ -555,6 +684,61 @@ export default function DoctorDashboard() {
     }
   };
 
+  const handlePayoutChange = (event) => {
+    const { name, value } = event.target;
+
+    setPayoutForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handlePayoutSubmit = async (event) => {
+    event.preventDefault();
+
+    const requestedAmount = Number(payoutForm.amount);
+
+    if (!requestedAmount || requestedAmount <= 0) {
+      setError("Please enter a valid payout amount.");
+      return;
+    }
+
+    if (!payoutForm.method) {
+      setError("Please select payout method.");
+      return;
+    }
+
+    if (!payoutForm.accountNumber) {
+      setError("Account number is required.");
+      return;
+    }
+
+    try {
+      setPayoutSubmitting(true);
+      setError("");
+      setSuccess("");
+
+      await paymentApi.createPayoutRequest({
+        amount: requestedAmount,
+        method: payoutForm.method,
+        accountNumber: payoutForm.accountNumber,
+        accountHolderName: payoutForm.accountHolderName,
+        bankName: payoutForm.bankName,
+        branchName: payoutForm.branchName,
+        note: payoutForm.note,
+      });
+
+      setPayoutForm(emptyPayoutForm);
+      setSuccess("Payout request submitted successfully.");
+
+      await fetchDashboardData(true);
+    } catch (err) {
+      setError(err.message || "Failed to submit payout request.");
+    } finally {
+      setPayoutSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="grid min-h-screen place-items-center bg-slate-100">
@@ -574,7 +758,7 @@ export default function DoctorDashboard() {
   return (
     <DashboardLayout
       title={formatDoctorName(doctorProfile?.fullName || user?.name || "Doctor")}
-      subtitle="Manage doctor profile, appointments, video links and prescriptions"
+      subtitle="Manage doctor profile, appointments, video links, prescriptions and payments"
       role="doctor"
       user={dashboardUser}
       onRefresh={() => fetchDashboardData(true)}
@@ -590,7 +774,14 @@ export default function DoctorDashboard() {
           pendingAppointments={pendingAppointments}
           approvedAppointments={approvedAppointments}
           completedAppointments={completedAppointments}
+          todayAppointments={todayAppointments}
+          missingMeetingLinkAppointments={missingMeetingLinkAppointments}
+          paidAppointments={paidAppointments}
+          pendingPaymentAppointments={pendingPaymentAppointments}
+          totalEarnings={totalEarnings}
+          pendingEarnings={pendingEarnings}
           prescriptions={prescriptions}
+          paymentSummary={paymentSummary}
         />
       )}
 
@@ -608,6 +799,11 @@ export default function DoctorDashboard() {
       {activeView === "appointments" && (
         <AppointmentsLayout
           appointments={appointments}
+          pendingAppointments={pendingAppointments}
+          approvedAppointments={approvedAppointments}
+          completedAppointments={completedAppointments}
+          todayAppointments={todayAppointments}
+          missingMeetingLinkAppointments={missingMeetingLinkAppointments}
           meetingLinks={meetingLinks}
           actionLoading={actionLoading}
           hasPrescriptionForAppointment={hasPrescriptionForAppointment}
@@ -632,6 +828,24 @@ export default function DoctorDashboard() {
           onSelectAppointment={setSelectedAppointment}
           onChange={handlePrescriptionChange}
           onSubmit={handlePrescriptionSubmit}
+        />
+      )}
+
+      {activeView === "payments" && (
+        <PaymentsLayout
+          appointments={appointments}
+          doctorProfile={doctorProfile}
+          paidAppointments={paidAppointments}
+          pendingPaymentAppointments={pendingPaymentAppointments}
+          totalEarnings={totalEarnings}
+          pendingEarnings={pendingEarnings}
+          paymentSummary={paymentSummary}
+          paymentTransactions={paymentTransactions}
+          payoutRequests={payoutRequests}
+          payoutForm={payoutForm}
+          payoutSubmitting={payoutSubmitting}
+          onPayoutChange={handlePayoutChange}
+          onPayoutSubmit={handlePayoutSubmit}
         />
       )}
     </DashboardLayout>
@@ -685,21 +899,140 @@ function ImageWithFallback({
   return <div className={fallbackClassName}>{initial}</div>;
 }
 
+function NotificationPanel({
+  pendingAppointments = [],
+  todayAppointments = [],
+  missingMeetingLinkAppointments = [],
+  pendingPaymentAppointments = [],
+}) {
+  const notices = [];
+
+  if (pendingAppointments.length > 0) {
+    notices.push({
+      icon: <Bell size={18} />,
+      title: `${pendingAppointments.length} appointment request${
+        pendingAppointments.length > 1 ? "s" : ""
+      } waiting for approval`,
+      text: "Review pending patient bookings and approve the valid requests.",
+      tone: "border-amber-200 bg-amber-50 text-amber-800",
+    });
+  }
+
+  if (todayAppointments.length > 0) {
+    notices.push({
+      icon: <CalendarDays size={18} />,
+      title: `${todayAppointments.length} appointment${
+        todayAppointments.length > 1 ? "s" : ""
+      } scheduled today`,
+      text: "Keep meeting links and consultation preparation ready for today.",
+      tone: "border-cyan-200 bg-cyan-50 text-cyan-800",
+    });
+  }
+
+  if (missingMeetingLinkAppointments.length > 0) {
+    notices.push({
+      icon: <Video size={18} />,
+      title: `${missingMeetingLinkAppointments.length} appointment${
+        missingMeetingLinkAppointments.length > 1 ? "s" : ""
+      } need meeting link`,
+      text: "Add Google Meet, Zoom or Jitsi link before the consultation starts.",
+      tone: "border-red-200 bg-red-50 text-red-700",
+    });
+  }
+
+  if (pendingPaymentAppointments.length > 0) {
+    notices.push({
+      icon: <CreditCard size={18} />,
+      title: `${pendingPaymentAppointments.length} payment${
+        pendingPaymentAppointments.length > 1 ? "s" : ""
+      } still pending`,
+      text: "Check payment status before confirming final consultation completion.",
+      tone: "border-slate-200 bg-slate-50 text-slate-700",
+    });
+  }
+
+  if (notices.length === 0) {
+    return (
+      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+        <div className="flex items-start gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white text-emerald-700 shadow-sm">
+            <CheckCircle2 size={20} />
+          </div>
+          <div>
+            <h3 className="font-black text-emerald-900">All clear for now</h3>
+            <p className="mt-1 text-sm font-semibold text-emerald-700">
+              No urgent appointment, meeting link or payment notification is pending.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-50 text-cyan-700">
+          <Bell size={20} />
+        </div>
+        <div>
+          <h2 className="text-lg font-black text-slate-950">Doctor Notifications</h2>
+          <p className="text-sm font-semibold text-slate-500">
+            Live reminders generated from your appointment data
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        {notices.map((notice) => (
+          <div key={notice.title} className={`rounded-2xl border p-4 ${notice.tone}`}>
+            <div className="flex gap-3">
+              <div className="mt-0.5 shrink-0">{notice.icon}</div>
+              <div>
+                <p className="text-sm font-black">{notice.title}</p>
+                <p className="mt-1 text-xs font-semibold opacity-80">{notice.text}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OverviewLayout({
   doctorProfile,
   appointments,
   pendingAppointments,
   approvedAppointments,
   completedAppointments,
+  todayAppointments,
+  missingMeetingLinkAppointments,
+  pendingPaymentAppointments,
+  totalEarnings,
+  pendingEarnings,
   prescriptions,
+  paymentSummary,
 }) {
   const latestAppointments = appointments.slice(0, 4);
   const doctorName = doctorProfile?.fullName || "";
   const doctorInitial = getDoctorInitial(doctorName);
 
+  const walletAvailable =
+    paymentSummary?.availableBalance !== undefined
+      ? paymentSummary.availableBalance
+      : totalEarnings;
+
   return (
     <section className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <NotificationPanel
+        pendingAppointments={pendingAppointments}
+        todayAppointments={todayAppointments}
+        missingMeetingLinkAppointments={missingMeetingLinkAppointments}
+        pendingPaymentAppointments={pendingPaymentAppointments}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={<CalendarDays size={22} />}
           label="Total Appointments"
@@ -708,14 +1041,20 @@ function OverviewLayout({
         />
         <StatCard
           icon={<Clock size={22} />}
-          label="Pending Bookings"
+          label="Today"
+          value={todayAppointments.length}
+          tone="slate"
+        />
+        <StatCard
+          icon={<Bell size={22} />}
+          label="Pending Requests"
           value={pendingAppointments.length}
           tone="amber"
         />
         <StatCard
-          icon={<CheckCircle2 size={22} />}
-          label="Approved"
-          value={approvedAppointments.length}
+          icon={<Wallet size={22} />}
+          label="Available Balance"
+          value={formatCurrency(walletAvailable)}
           tone="emerald"
         />
         <StatCard
@@ -774,7 +1113,7 @@ function OverviewLayout({
               label="Consultation Fee"
               value={
                 doctorProfile?.consultationFee !== undefined
-                  ? `৳${doctorProfile.consultationFee}`
+                  ? formatCurrency(doctorProfile.consultationFee)
                   : "Not set"
               }
             />
@@ -785,6 +1124,12 @@ function OverviewLayout({
           title="Recent Patient Bookings"
           subtitle="Latest appointments booked by patients"
         >
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <InfoBlock label="Approved" value={approvedAppointments.length} />
+            <InfoBlock label="Completed" value={completedAppointments.length} />
+            <InfoBlock label="Pending Earning" value={formatCurrency(pendingEarnings)} />
+          </div>
+
           {latestAppointments.length === 0 ? (
             <EmptyState text="No appointments booked yet." />
           ) : (
@@ -978,6 +1323,11 @@ function ProfileEditLayout({
 
 function AppointmentsLayout({
   appointments,
+  pendingAppointments,
+  approvedAppointments,
+  completedAppointments,
+  todayAppointments,
+  missingMeetingLinkAppointments,
   meetingLinks,
   actionLoading,
   hasPrescriptionForAppointment,
@@ -986,21 +1336,96 @@ function AppointmentsLayout({
   onStatusUpdate,
   onSelectPrescription,
 }) {
+  const [filter, setFilter] = useState("all");
+
+  const filterItems = [
+    { key: "all", label: "All", count: appointments.length },
+    { key: "pending", label: "Pending", count: pendingAppointments.length },
+    { key: "approved", label: "Approved", count: approvedAppointments.length },
+    { key: "completed", label: "Completed", count: completedAppointments.length },
+    { key: "today", label: "Today", count: todayAppointments.length },
+  ];
+
+  const filteredAppointments = appointments.filter((appointment) => {
+    if (filter === "all") return true;
+    if (filter === "today") return isTodayDate(appointment.appointmentDate);
+
+    return normalizeText(appointment.status) === filter;
+  });
+
   return (
-    <section id="appointments" className="scroll-mt-6">
+    <section id="appointments" className="space-y-6 scroll-mt-6">
+      <NotificationPanel
+        pendingAppointments={pendingAppointments}
+        todayAppointments={todayAppointments}
+        missingMeetingLinkAppointments={missingMeetingLinkAppointments}
+        pendingPaymentAppointments={appointments.filter((appointment) => {
+          return !isPaidAppointment(appointment) && !isCancelledAppointment(appointment);
+        })}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          icon={<CalendarDays size={22} />}
+          label="All Appointments"
+          value={appointments.length}
+          tone="cyan"
+        />
+        <StatCard
+          icon={<Bell size={22} />}
+          label="Pending Approval"
+          value={pendingAppointments.length}
+          tone="amber"
+        />
+        <StatCard
+          icon={<Video size={22} />}
+          label="Missing Meeting Link"
+          value={missingMeetingLinkAppointments.length}
+          tone="slate"
+        />
+        <StatCard
+          icon={<CheckCircle2 size={22} />}
+          label="Completed"
+          value={completedAppointments.length}
+          tone="emerald"
+        />
+      </div>
+
       <Panel
-        title="Patient Appointment Bookings"
-        subtitle="Doctor can check all patient bookings, approve, complete and add meeting links"
+        title="Appointment Management"
+        subtitle="Review patient bookings, approve requests, save video links, complete consultations and create prescriptions"
         icon={<CalendarDays size={20} />}
       >
+        <div className="mb-5 flex flex-wrap gap-2">
+          {filterItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setFilter(item.key)}
+              className={`rounded-2xl border px-4 py-2 text-xs font-black transition ${
+                filter === item.key
+                  ? "border-cyan-300 bg-cyan-50 text-cyan-800"
+                  : "border-slate-200 bg-white text-slate-500 hover:border-cyan-200 hover:text-cyan-700"
+              }`}
+            >
+              {item.label} · {item.count}
+            </button>
+          ))}
+        </div>
+
         {appointments.length === 0 ? (
           <EmptyState text="No appointments booked by patients yet." />
+        ) : filteredAppointments.length === 0 ? (
+          <EmptyState text="No appointment found in this filter." />
         ) : (
           <div className="space-y-4">
-            {appointments.map((appointment) => {
+            {filteredAppointments.map((appointment) => {
               const alreadyPrescribed = hasPrescriptionForAppointment(
                 appointment._id
               );
+              const currentMeetingLink =
+                meetingLinks[appointment._id] || appointment.meetingLink || "";
+              const appointmentFee = getAppointmentFee(appointment);
 
               return (
                 <div
@@ -1008,22 +1433,36 @@ function AppointmentsLayout({
                   className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-black text-slate-950">
-                        {appointment.patient?.name || "Patient"}
-                      </h3>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-black text-slate-950">
+                          {appointment.patient?.name || "Patient"}
+                        </h3>
+                        {isTodayDate(appointment.appointmentDate) && (
+                          <span className="rounded-full bg-cyan-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-cyan-700">
+                            Today
+                          </span>
+                        )}
+                      </div>
+
                       <p className="mt-1 text-sm text-slate-500">
                         {appointment.patient?.email || "No email"}
+                        {appointment.patient?.phone
+                          ? ` · ${appointment.patient.phone}`
+                          : ""}
                       </p>
                       <p className="mt-2 text-sm font-bold text-cyan-700">
                         {appointment.symptoms || "No symptoms note provided"}
                       </p>
                     </div>
 
-                    <StatusBadge status={appointment.status} />
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <StatusBadge status={appointment.status} />
+                      <StatusBadge status={appointment.paymentStatus || "payment pending"} />
+                    </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                  <div className="mt-4 grid gap-3 md:grid-cols-5">
                     <InfoBlock
                       label="Date"
                       value={formatDate(appointment.appointmentDate)}
@@ -1033,6 +1472,10 @@ function AppointmentsLayout({
                       value={`${appointment.startTime || "--"} - ${
                         appointment.endTime || "--"
                       }`}
+                    />
+                    <InfoBlock
+                      label="Fee"
+                      value={appointmentFee ? formatCurrency(appointmentFee) : "Not set"}
                     />
                     <InfoBlock
                       label="Payment"
@@ -1051,9 +1494,18 @@ function AppointmentsLayout({
                   )}
 
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                    <label className="mb-2 block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-                      Video Meeting Link
-                    </label>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <label className="block text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                        Video Meeting Link
+                      </label>
+
+                      {!currentMeetingLink && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-700">
+                          <AlertCircle size={13} />
+                          Link required
+                        </span>
+                      )}
+                    </div>
 
                     <div className="flex flex-col gap-2 md:flex-row">
                       <input
@@ -1072,15 +1524,15 @@ function AppointmentsLayout({
                         type="button"
                         disabled={actionLoading}
                         onClick={() => onMeetingLinkSave(appointment._id)}
-                        className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Save Link
                       </button>
                     </div>
 
-                    {appointment.meetingLink && (
+                    {currentMeetingLink && (
                       <a
-                        href={appointment.meetingLink}
+                        href={currentMeetingLink}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-3 inline-flex items-center gap-2 rounded-xl bg-cyan-50 px-3 py-2 text-sm font-black text-cyan-700 hover:bg-cyan-100"
@@ -1095,12 +1547,12 @@ function AppointmentsLayout({
                     <button
                       type="button"
                       disabled={
-                        actionLoading || appointment.status === "approved"
+                        actionLoading || normalizeText(appointment.status) === "approved"
                       }
                       onClick={() =>
                         onStatusUpdate(appointment._id, "approved")
                       }
-                      className="rounded-xl bg-cyan-600 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-xl bg-cyan-600 px-4 py-2 text-xs font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Approve
                     </button>
@@ -1108,12 +1560,12 @@ function AppointmentsLayout({
                     <button
                       type="button"
                       disabled={
-                        actionLoading || appointment.status === "completed"
+                        actionLoading || normalizeText(appointment.status) === "completed"
                       }
                       onClick={() =>
                         onStatusUpdate(appointment._id, "completed")
                       }
-                      className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Complete
                     </button>
@@ -1122,7 +1574,7 @@ function AppointmentsLayout({
                       type="button"
                       disabled={alreadyPrescribed}
                       onClick={() => onSelectPrescription(appointment)}
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <FileText size={14} />
                       {alreadyPrescribed
@@ -1136,6 +1588,367 @@ function AppointmentsLayout({
           </div>
         )}
       </Panel>
+    </section>
+  );
+}
+
+function PaymentsLayout({
+  appointments,
+  doctorProfile,
+  paidAppointments,
+  pendingPaymentAppointments,
+  totalEarnings,
+  pendingEarnings,
+  paymentSummary,
+  paymentTransactions,
+  payoutRequests,
+  payoutForm,
+  payoutSubmitting,
+  onPayoutChange,
+  onPayoutSubmit,
+}) {
+  const realSummary = paymentSummary || {};
+
+  const walletTotalEarned =
+    realSummary.totalEarned !== undefined ? realSummary.totalEarned : totalEarnings;
+
+  const walletAvailable =
+    realSummary.availableBalance !== undefined
+      ? realSummary.availableBalance
+      : totalEarnings;
+
+  const walletPending =
+    realSummary.pendingBalance !== undefined ? realSummary.pendingBalance : 0;
+
+  const walletWithdrawn =
+    realSummary.withdrawnBalance !== undefined ? realSummary.withdrawnBalance : 0;
+
+  const platformFeeTotal =
+    realSummary.platformFeeTotal !== undefined ? realSummary.platformFeeTotal : 0;
+
+  const paidAppointmentCount =
+    realSummary.totalPaidAppointments !== undefined
+      ? realSummary.totalPaidAppointments
+      : paidAppointments.length;
+
+  const recentFallbackPayments = [...appointments]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt || b.appointmentDate || 0) -
+        new Date(a.createdAt || a.appointmentDate || 0)
+    )
+    .slice(0, 8);
+
+  const hasRealTransactions = paymentTransactions.length > 0;
+
+  return (
+    <section id="payments" className="space-y-6 scroll-mt-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          icon={<Wallet size={22} />}
+          label="Available Balance"
+          value={formatCurrency(walletAvailable)}
+          tone="emerald"
+        />
+
+        <StatCard
+          icon={<Banknote size={22} />}
+          label="Total Earned"
+          value={formatCurrency(walletTotalEarned)}
+          tone="cyan"
+        />
+
+        <StatCard
+          icon={<Clock size={22} />}
+          label="Pending Payout"
+          value={formatCurrency(walletPending)}
+          tone="amber"
+        />
+
+        <StatCard
+          icon={<CreditCard size={22} />}
+          label="Withdrawn"
+          value={formatCurrency(walletWithdrawn)}
+          tone="slate"
+        />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <Panel
+          title="Doctor Wallet"
+          subtitle="Your available balance is released after paid appointments are completed"
+          icon={<Wallet size={20} />}
+        >
+          <div className="space-y-3">
+            <InfoBlock
+              label="Consultation Fee"
+              value={
+                doctorProfile?.consultationFee !== undefined
+                  ? formatCurrency(doctorProfile.consultationFee)
+                  : "Not set"
+              }
+            />
+
+            <InfoBlock
+              label="Paid Completed Appointments"
+              value={paidAppointmentCount}
+            />
+
+            <InfoBlock
+              label="Platform Commission"
+              value={formatCurrency(platformFeeTotal)}
+            />
+
+            <InfoBlock
+              label="Pending Patient Payments"
+              value={`${pendingPaymentAppointments.length} appointment(s)`}
+            />
+
+            <InfoBlock
+              label="Pending Payment Amount"
+              value={formatCurrency(pendingEarnings)}
+            />
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+            <p className="text-sm font-black text-cyan-900">
+              How doctor earning works
+            </p>
+            <p className="mt-1 text-sm font-semibold leading-6 text-cyan-800">
+              Patient payment must be paid first. Then when the doctor marks the
+              appointment as completed, the doctor earning is released to this wallet.
+              From here doctor can request payout by bKash, Nagad or Bank.
+            </p>
+          </div>
+        </Panel>
+
+        <Panel
+          title="Request Payout"
+          subtitle="Submit a withdraw request to admin"
+          icon={<Banknote size={20} />}
+        >
+          <form onSubmit={onPayoutSubmit} className="space-y-4">
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                Available for payout
+              </p>
+              <p className="mt-1 text-3xl font-black text-emerald-950">
+                {formatCurrency(walletAvailable)}
+              </p>
+            </div>
+
+            <FormField
+              label="Payout Amount"
+              type="number"
+              name="amount"
+              value={payoutForm.amount}
+              onChange={onPayoutChange}
+              placeholder="500"
+            />
+
+            <div>
+              <label className="mb-2 block text-sm font-black text-slate-700">
+                Payout Method
+              </label>
+
+              <select
+                name="method"
+                value={payoutForm.method}
+                onChange={onPayoutChange}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none transition focus:border-cyan-500 focus:bg-white"
+              >
+                <option value="bkash">bKash</option>
+                <option value="nagad">Nagad</option>
+                <option value="bank">Bank</option>
+              </select>
+            </div>
+
+            <FormField
+              label="Account Number"
+              name="accountNumber"
+              value={payoutForm.accountNumber}
+              onChange={onPayoutChange}
+              placeholder="01XXXXXXXXX / Bank account number"
+            />
+
+            <FormField
+              label="Account Holder Name"
+              name="accountHolderName"
+              value={payoutForm.accountHolderName}
+              onChange={onPayoutChange}
+              placeholder="Account holder name"
+            />
+
+            {payoutForm.method === "bank" && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  label="Bank Name"
+                  name="bankName"
+                  value={payoutForm.bankName}
+                  onChange={onPayoutChange}
+                  placeholder="Bank name"
+                />
+
+                <FormField
+                  label="Branch Name"
+                  name="branchName"
+                  value={payoutForm.branchName}
+                  onChange={onPayoutChange}
+                  placeholder="Branch name"
+                />
+              </div>
+            )}
+
+            <TextAreaField
+              label="Note"
+              name="note"
+              value={payoutForm.note}
+              onChange={onPayoutChange}
+              placeholder="Optional payout note"
+              rows={3}
+            />
+
+            <button
+              type="submit"
+              disabled={payoutSubmitting || walletAvailable <= 0}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3.5 text-sm font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {payoutSubmitting && <Loader2 size={18} className="animate-spin" />}
+              Submit Payout Request
+            </button>
+          </form>
+        </Panel>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Panel
+          title="Released Payment Transactions"
+          subtitle="Appointment earnings released to doctor wallet"
+          icon={<CreditCard size={20} />}
+        >
+          {hasRealTransactions ? (
+            <div className="space-y-3">
+              {paymentTransactions.map((transaction) => (
+                <div
+                  key={transaction._id}
+                  className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-black text-slate-950">
+                        {transaction.patient?.name || "Patient"}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {formatDateTime(transaction.createdAt)}
+                      </p>
+                      <p className="mt-2 break-all text-xs font-bold text-slate-400">
+                        Ref: {transaction.reference || "N/A"}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-lg font-black text-emerald-700">
+                        {formatCurrency(transaction.doctorAmount)}
+                      </p>
+                      <StatusBadge status={transaction.status || "released"} />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <InfoBlock
+                      label="Gross Amount"
+                      value={formatCurrency(transaction.amount)}
+                    />
+                    <InfoBlock
+                      label="Platform Fee"
+                      value={formatCurrency(transaction.platformFee)}
+                    />
+                    <InfoBlock
+                      label="Doctor Earning"
+                      value={formatCurrency(transaction.doctorAmount)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : recentFallbackPayments.length === 0 ? (
+            <EmptyState text="No payment records found yet." />
+          ) : (
+            <div className="space-y-3">
+              {recentFallbackPayments.map((appointment) => {
+                const fee = getAppointmentFee(appointment, doctorProfile);
+
+                return (
+                  <div
+                    key={appointment._id}
+                    className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-black text-slate-950">
+                          {appointment.patient?.name || "Patient"}
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {formatDate(appointment.appointmentDate)} ·{" "}
+                          {appointment.startTime || "--"}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-lg font-black text-slate-950">
+                          {fee ? formatCurrency(fee) : "Not set"}
+                        </p>
+                        <StatusBadge status={appointment.paymentStatus || "pending"} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          title="Payout Request History"
+          subtitle="Admin approval and payment status"
+          icon={<Banknote size={20} />}
+        >
+          {payoutRequests.length === 0 ? (
+            <EmptyState text="No payout request submitted yet." />
+          ) : (
+            <div className="space-y-3">
+              {payoutRequests.map((request) => (
+                <div
+                  key={request._id}
+                  className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-black text-slate-950">
+                        {formatCurrency(request.amount)}
+                      </h3>
+                      <p className="mt-1 text-sm font-semibold text-slate-600">
+                        {request.method?.toUpperCase()} · {request.accountNumber}
+                      </p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">
+                        Requested: {formatDateTime(request.requestedAt || request.createdAt)}
+                      </p>
+                    </div>
+
+                    <StatusBadge status={request.status || "requested"} />
+                  </div>
+
+                  {request.adminNote && (
+                    <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+                      Admin note: {request.adminNote}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
     </section>
   );
 }

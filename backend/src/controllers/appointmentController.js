@@ -1,7 +1,120 @@
 import Appointment from "../models/Appointment.js";
 import Doctor from "../models/Doctor.js";
+import DoctorWallet from "../models/DoctorWallet.js";
+import PaymentTransaction from "../models/PaymentTransaction.js";
 
-// Book appointment
+const PLATFORM_COMMISSION_PERCENTAGE =
+  Number(process.env.PLATFORM_COMMISSION_PERCENTAGE) || 10;
+
+function calculateDoctorEarning(amount = 0) {
+  const safeAmount = Math.max(Number(amount) || 0, 0);
+  const platformFee = Math.round(
+    (safeAmount * PLATFORM_COMMISSION_PERCENTAGE) / 100
+  );
+  const doctorEarning = Math.max(safeAmount - platformFee, 0);
+
+  return {
+    amount: safeAmount,
+    platformFee,
+    doctorEarning,
+  };
+}
+
+async function releaseDoctorEarningIfReady(appointment) {
+  if (!appointment) return null;
+
+  const isReady =
+    appointment.status === "completed" &&
+    appointment.paymentStatus === "paid" &&
+    !appointment.earningReleased;
+
+  if (!isReady) {
+    return null;
+  }
+
+  const { amount, platformFee, doctorEarning } = calculateDoctorEarning(
+    appointment.paymentAmount
+  );
+
+  if (amount <= 0 || doctorEarning <= 0) {
+    return null;
+  }
+
+  const releasedAppointment = await Appointment.findOneAndUpdate(
+    {
+      _id: appointment._id,
+      status: "completed",
+      paymentStatus: "paid",
+      earningReleased: { $ne: true },
+    },
+    {
+      $set: {
+        platformFee,
+        doctorEarning,
+        earningStatus: "released",
+        earningReleased: true,
+        earningReleasedAt: new Date(),
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  if (!releasedAppointment) {
+    return null;
+  }
+
+  await DoctorWallet.findOneAndUpdate(
+    {
+      doctor: releasedAppointment.doctor,
+    },
+    {
+      $setOnInsert: {
+        doctor: releasedAppointment.doctor,
+      },
+      $inc: {
+        totalEarned: doctorEarning,
+        availableBalance: doctorEarning,
+        platformFeeTotal: platformFee,
+        totalPaidAppointments: 1,
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+    }
+  );
+
+  await PaymentTransaction.findOneAndUpdate(
+    {
+      appointment: releasedAppointment._id,
+    },
+    {
+      $setOnInsert: {
+        patient: releasedAppointment.patient,
+        doctor: releasedAppointment.doctor,
+        appointment: releasedAppointment._id,
+        amount,
+        platformFee,
+        doctorAmount: doctorEarning,
+        paymentMethod: "mock",
+        status: "released",
+        reference:
+          releasedAppointment.paymentReference ||
+          `MEDILINK-${releasedAppointment._id}`,
+        releasedAt: new Date(),
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+    }
+  );
+
+  return releasedAppointment;
+}
+
 export const bookAppointment = async (req, res) => {
   try {
     const {
@@ -22,10 +135,17 @@ export const bookAppointment = async (req, res) => {
       });
     }
 
-    if (!doctor || !appointmentDate || !appointmentDay || !startTime || !endTime) {
+    if (
+      !doctor ||
+      !appointmentDate ||
+      !appointmentDay ||
+      !startTime ||
+      !endTime
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Doctor, appointment date, day, start time, and end time are required",
+        message:
+          "Doctor, appointment date, day, start time, and end time are required",
       });
     }
 
@@ -118,7 +238,10 @@ export const bookAppointment = async (req, res) => {
       symptoms,
       medicalNotes,
       consultationType: consultationType || "video",
-      paymentAmount: doctorProfile.consultationFee,
+      paymentAmount: Number(doctorProfile.consultationFee) || 0,
+      paymentStatus: "pending",
+      earningStatus: "not_ready",
+      earningReleased: false,
     });
 
     const populatedAppointment = await Appointment.findById(appointment._id)
@@ -145,7 +268,6 @@ export const bookAppointment = async (req, res) => {
   }
 };
 
-// Get logged-in patient's appointments
 export const getMyAppointments = async (req, res) => {
   try {
     const appointments = await Appointment.find({
@@ -174,7 +296,6 @@ export const getMyAppointments = async (req, res) => {
   }
 };
 
-// Get doctor appointment queue
 export const getDoctorAppointments = async (req, res) => {
   try {
     let filter = {};
@@ -224,10 +345,9 @@ export const getDoctorAppointments = async (req, res) => {
   }
 };
 
-// Update appointment status
 export const updateAppointmentStatus = async (req, res) => {
   try {
-    const { status, meetingLink, paymentStatus } = req.body;
+    const { status, meetingLink, paymentStatus, paymentReference } = req.body;
 
     const allowedStatus = ["pending", "approved", "completed", "cancelled"];
     const allowedPaymentStatus = ["pending", "paid", "failed", "waived"];
@@ -246,7 +366,7 @@ export const updateAppointmentStatus = async (req, res) => {
       });
     }
 
-    const appointment = await Appointment.findById(req.params.id);
+    let appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
       return res.status(404).json({
@@ -260,7 +380,10 @@ export const updateAppointmentStatus = async (req, res) => {
         user: req.user._id,
       });
 
-      if (!doctorProfile || appointment.doctor.toString() !== doctorProfile._id.toString()) {
+      if (
+        !doctorProfile ||
+        appointment.doctor.toString() !== doctorProfile._id.toString()
+      ) {
         return res.status(403).json({
           success: false,
           message: "You are not allowed to update this appointment",
@@ -287,8 +410,17 @@ export const updateAppointmentStatus = async (req, res) => {
     if (status) appointment.status = status;
     if (meetingLink !== undefined) appointment.meetingLink = meetingLink;
     if (paymentStatus) appointment.paymentStatus = paymentStatus;
+    if (paymentReference !== undefined) {
+      appointment.paymentReference = paymentReference;
+    }
 
     await appointment.save();
+
+    const releasedAppointment = await releaseDoctorEarningIfReady(appointment);
+
+    if (releasedAppointment) {
+      appointment = releasedAppointment;
+    }
 
     const updatedAppointment = await Appointment.findById(appointment._id)
       .populate("patient", "name email phone role")
@@ -302,7 +434,9 @@ export const updateAppointmentStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Appointment updated successfully",
+      message: releasedAppointment
+        ? "Appointment updated and doctor earning released successfully"
+        : "Appointment updated successfully",
       appointment: updatedAppointment,
     });
   } catch (error) {
