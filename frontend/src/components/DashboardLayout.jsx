@@ -10,7 +10,6 @@ import {
   Database,
   FileCheck2,
   Headphones,
-  Home,
   Menu,
   RefreshCw,
   ShieldCheck,
@@ -118,6 +117,8 @@ const roleThemes = {
     profileHover:
       "hover:border-emerald-400/40 hover:bg-emerald-400/[0.06] hover:shadow-emerald-500/10",
     profileHint: "text-emerald-300",
+    syncText: "text-emerald-700",
+    syncBorder: "border-emerald-200",
   },
   doctor: {
     accent: "from-cyan-400 to-blue-500",
@@ -126,6 +127,8 @@ const roleThemes = {
     profileHover:
       "hover:border-cyan-400/40 hover:bg-cyan-400/[0.06] hover:shadow-cyan-500/10",
     profileHint: "text-cyan-300",
+    syncText: "text-cyan-700",
+    syncBorder: "border-cyan-200",
   },
   admin: {
     accent: "from-violet-400 to-fuchsia-500",
@@ -134,6 +137,8 @@ const roleThemes = {
     profileHover:
       "hover:border-violet-400/40 hover:bg-violet-400/[0.06] hover:shadow-violet-500/10",
     profileHint: "text-violet-300",
+    syncText: "text-violet-700",
+    syncBorder: "border-violet-200",
   },
 };
 
@@ -514,35 +519,40 @@ export default function DashboardLayout({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {lastSynced && (
-                <span className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 sm:inline-flex">
-                  <Database size={14} className="text-emerald-600" />
-                  Synced {formatDateTime(lastSynced)}
-                </span>
-              )}
+              <div
+                className={cx(
+                  "hidden items-center gap-2 rounded-xl border bg-white px-3 py-2 text-xs font-bold shadow-sm sm:inline-flex",
+                  theme.syncBorder,
+                  theme.syncText
+                )}
+              >
+                <Database size={14} />
+                {refreshing
+                  ? "Syncing live data..."
+                  : lastSynced
+                  ? `Synced ${formatDateTime(lastSynced)}`
+                  : "Ready to sync"}
+              </div>
 
               {onRefresh && (
                 <button
                   type="button"
                   onClick={onRefresh}
                   disabled={refreshing}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:border-emerald-200 hover:text-emerald-700 disabled:opacity-60"
+                  className={cx(
+                    "inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2.5 text-sm font-black shadow-sm transition-all",
+                    refreshing
+                      ? "cursor-wait border-cyan-200 text-cyan-700 ring-4 ring-cyan-100"
+                      : "border-slate-200 text-slate-700 hover:border-emerald-200 hover:text-emerald-700 hover:shadow-md"
+                  )}
                 >
                   <RefreshCw
                     size={16}
                     className={refreshing ? "animate-spin" : ""}
                   />
-                  Refresh
+                  {refreshing ? "Syncing..." : "Sync Data"}
                 </button>
               )}
-
-              <Link
-                to="/"
-                className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:border-cyan-200 hover:text-cyan-700 sm:inline-flex"
-              >
-                <Home size={16} />
-                Home
-              </Link>
 
               <Link
                 to="/"
