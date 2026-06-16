@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import {
   createReplacementRequest,
   getAllReplacementRequests,
@@ -9,26 +9,11 @@ import { authorizeRoles, protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.post(
-  "/",
-  protect,
-  authorizeRoles("patient"),
-  createReplacementRequest
-);
+router.post("/", protect, authorizeRoles("patient"), createReplacementRequest);
 
-router.get(
-  "/my",
-  protect,
-  authorizeRoles("patient"),
-  getMyReplacementRequests
-);
+router.get("/my", protect, authorizeRoles("patient"), getMyReplacementRequests);
 
-router.get(
-  "/",
-  protect,
-  authorizeRoles("admin"),
-  getAllReplacementRequests
-);
+router.get("/", protect, authorizeRoles("admin"), getAllReplacementRequests);
 
 router.patch(
   "/:id",

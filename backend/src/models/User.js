@@ -44,6 +44,18 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    designation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    bio: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     gender: {
       type: String,
       enum: ["", "male", "female", "other"],
@@ -105,11 +117,41 @@ const userSchema = new mongoose.Schema(
       enum: ["active", "inactive", "blocked"],
       default: "active",
     },
+
+    adminNote: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    statusUpdatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    statusUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
+
+    activatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+userSchema.index({ role: 1, status: 1 });
+userSchema.index({ createdAt: -1 });
 
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) {

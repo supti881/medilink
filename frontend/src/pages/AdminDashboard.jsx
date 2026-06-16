@@ -5,8 +5,10 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock,
+  Edit3,
   FileText,
   Headphones,
+  ImagePlus,
   Loader2,
   Mail,
   Phone,
@@ -22,9 +24,22 @@ import {
   doctorApi,
   replacementRequestApi,
   supportTicketApi,
+  uploadApi,
 } from "../services/api";
 import DashboardLayout from "../components/DashboardLayout";
 import { getDashboardPath } from "../utils/auth";
+
+const API_ORIGIN = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
+).replace(/\/api\/?$/, "");
+
+function getMediaUrl(value = "") {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (value.startsWith("data:")) return value;
+  if (value.startsWith("/")) return `${API_ORIGIN}${value}`;
+  return `${API_ORIGIN}/${value}`;
+}
 
 function getActiveView(hash) {
   if (hash === "#profile") return "profile";
@@ -103,7 +118,11 @@ function getStoredAdminProfile(user) {
       email: user?.email || savedProfile.email || "",
       phone: savedProfile.phone || user?.phone || "",
       designation: savedProfile.designation || "System Administrator",
-      imageUrl: savedProfile.imageUrl || user?.imageUrl || "",
+      imageUrl:
+        savedProfile.imageUrl ||
+        user?.profileImage ||
+        user?.imageUrl ||
+        "",
       bio:
         savedProfile.bio ||
         "Responsible for managing doctors, patients, support tickets, reissue requests and MediLink operational workflows.",
@@ -196,6 +215,8 @@ function AdminDashboard() {
   const [lastSynced, setLastSynced] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
+  const [profileEditing, setProfileEditing] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -354,7 +375,7 @@ function AdminDashboard() {
     ...user,
     name: adminProfile?.name || user?.name,
     phone: adminProfile?.phone || user?.phone,
-    imageUrl: adminProfile?.imageUrl,
+    imageUrl: adminProfile?.imageUrl || user?.profileImage || user?.imageUrl,
     designation: adminProfile?.designation || "System Administrator",
   };
 
@@ -367,10 +388,64 @@ function AdminDashboard() {
     }));
   };
 
+  const handleAdminProfilePhotoUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload a valid image file.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Profile image must be less than 5MB.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      setProfilePhotoUploading(true);
+      setError("");
+      setSuccess("");
+
+      const response = await uploadApi.uploadDoctorPhoto(file);
+      const imageUrl = response.imageUrl || response.url || response.path || "";
+
+      if (!imageUrl) {
+        throw new Error("Image uploaded but image URL was not returned.");
+      }
+
+      const nextProfile = {
+        ...adminProfileForm,
+        imageUrl,
+        email: user?.email || adminProfileForm.email,
+      };
+
+      localStorage.setItem("medilink_admin_profile", JSON.stringify(nextProfile));
+
+      setAdminProfileForm(nextProfile);
+      setAdminProfile(nextProfile);
+
+      if (response.user) {
+        setUser(response.user);
+        localStorage.setItem("medilink_user", JSON.stringify(response.user));
+      }
+
+      setSuccess("Admin profile photo uploaded successfully. Click Save Admin Profile to confirm the profile details.");
+    } catch (err) {
+      setError(err.message || "Failed to upload admin profile photo.");
+    } finally {
+      setProfilePhotoUploading(false);
+      event.target.value = "";
+    }
+  };
+
   const handleAdminProfileSubmit = async (event) => {
     event.preventDefault();
 
-    if (!adminProfileForm.name) {
+    if (!adminProfileForm.name.trim()) {
       setError("Admin name is required.");
       return;
     }
@@ -382,18 +457,44 @@ function AdminDashboard() {
 
       const profileToSave = {
         ...adminProfileForm,
+        name: adminProfileForm.name.trim(),
+        phone: adminProfileForm.phone.trim(),
+        designation:
+          adminProfileForm.designation.trim() || "System Administrator",
+        bio: adminProfileForm.bio.trim(),
         email: user?.email || adminProfileForm.email,
       };
+
+      const response = await authApi.updateProfile({
+        name: profileToSave.name,
+        phone: profileToSave.phone,
+        profileImage: profileToSave.imageUrl,
+      });
+
+      const updatedUser = response.user || user;
 
       localStorage.setItem(
         "medilink_admin_profile",
         JSON.stringify(profileToSave)
       );
 
+      setUser(updatedUser);
       setAdminProfile(profileToSave);
-      setSuccess(
-        "Admin profile updated locally. Backend profile update API can be connected next."
-      );
+      setAdminProfileForm(profileToSave);
+
+      if (updatedUser) {
+        localStorage.setItem("medilink_user", JSON.stringify(updatedUser));
+      }
+
+      setSuccess("Admin profile saved successfully.");
+      setProfileEditing(false);
+
+      window.setTimeout(() => {
+        document.getElementById("profile")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 80);
     } catch (err) {
       setError(err.message || "Failed to update admin profile.");
     } finally {
@@ -515,8 +616,17 @@ function AdminDashboard() {
         <AdminProfileLayout
           user={user}
           form={adminProfileForm}
+          savedProfile={adminProfile}
+          editing={profileEditing}
           saving={profileSaving}
+          photoUploading={profilePhotoUploading}
+          onEdit={() => setProfileEditing(true)}
+          onCancel={() => {
+            setAdminProfileForm(adminProfile || getStoredAdminProfile(user));
+            setProfileEditing(false);
+          }}
           onChange={handleAdminProfileChange}
+          onPhotoUpload={handleAdminProfilePhotoUpload}
           onSubmit={handleAdminProfileSubmit}
         />
       )}
@@ -714,87 +824,235 @@ function OverviewLayout({
   );
 }
 
-function AdminProfileLayout({ user, form, saving, onChange, onSubmit }) {
-  return (
-    <section id="profile" className="scroll-mt-6">
-      <Panel
-        title="Admin Profile"
-        subtitle="This layout opens when the admin clicks the sidebar profile card"
-        icon={<UserRoundCog size={20} />}
-      >
-        <form onSubmit={onSubmit} className="space-y-6">
-          <div className="flex flex-col gap-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center">
-            {form.imageUrl ? (
-              <img
-                src={form.imageUrl}
-                alt={form.name || "Admin profile"}
-                className="h-24 w-24 rounded-3xl border border-slate-200 object-cover shadow-sm"
-              />
-            ) : (
-              <div className="grid h-24 w-24 place-items-center rounded-3xl border border-dashed border-slate-300 bg-white text-3xl font-black text-slate-400">
-                {form.name?.charAt(0)?.toUpperCase() || "A"}
+function AdminProfileLayout({
+  user,
+  form,
+  savedProfile,
+  editing,
+  saving,
+  photoUploading,
+  onEdit,
+  onCancel,
+  onChange,
+  onPhotoUpload,
+  onSubmit,
+}) {
+  const displayProfile = savedProfile || form || {};
+  const previewImage = getMediaUrl(form.imageUrl || displayProfile.imageUrl);
+  const displayImage = getMediaUrl(displayProfile.imageUrl || form.imageUrl);
+  const initials = (displayProfile.name || form.name || "A")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+
+  if (!editing) {
+    return (
+      <section id="profile" className="scroll-mt-6 space-y-6">
+        <div className="rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-6 shadow-sm">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              {displayImage ? (
+                <img
+                  src={displayImage}
+                  alt={displayProfile.name || "Admin profile"}
+                  className="h-28 w-28 rounded-[26px] border-4 border-white object-cover shadow-xl"
+                />
+              ) : (
+                <div className="grid h-28 w-28 place-items-center rounded-[26px] border-4 border-white bg-slate-900 text-4xl font-black text-white shadow-xl">
+                  {initials || "A"}
+                </div>
+              )}
+
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.45em] text-violet-700">
+                  Admin Profile
+                </p>
+                <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+                  {displayProfile.name || "MediLink Admin"}
+                </h2>
+                <p className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-600">
+                  <Mail size={16} className="text-violet-600" />
+                  {user?.email || displayProfile.email || "No email profile"}
+                </p>
               </div>
-            )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 py-4 text-sm font-black text-white shadow-xl shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-slate-900"
+            >
+              <Edit3 size={18} />
+              Edit Profile
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <ProfileInfoCard
+            icon={<Phone size={21} />}
+            label="Phone Number"
+            value={displayProfile.phone || "Not set"}
+          />
+          <ProfileInfoCard
+            icon={<ShieldCheck size={21} />}
+            label="Role Access"
+            value={(user?.role || "admin").toUpperCase()}
+          />
+          <ProfileInfoCard
+            icon={<UserRoundCog size={21} />}
+            label="Designation"
+            value={displayProfile.designation || "System Administrator"}
+          />
+          <ProfileInfoCard
+            icon={<CheckCircle2 size={21} />}
+            label="Account Status"
+            value={user?.status || "active"}
+          />
+          <ProfileInfoCard
+            icon={<Mail size={21} />}
+            label="Email Address"
+            value={user?.email || displayProfile.email || "No email profile"}
+          />
+          <ProfileInfoCard
+            icon={<CalendarDays size={21} />}
+            label="Last Synced"
+            value={formatDateTime(user?.updatedAt || user?.createdAt)}
+          />
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+              <FileText size={22} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-950">
+                Admin Responsibility
+              </h3>
+              <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">
+                {displayProfile.bio ||
+                  "Responsible for managing doctors, patients, support tickets, reissue requests and MediLink operational workflows."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="profile" className="scroll-mt-6 space-y-6">
+      <div className="rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-6 shadow-sm">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className="relative h-28 w-28 shrink-0">
+              {previewImage ? (
+                <img
+                  src={previewImage}
+                  alt={form.name || "Admin profile"}
+                  className="h-28 w-28 rounded-[26px] border-4 border-white object-cover shadow-xl"
+                />
+              ) : (
+                <div className="grid h-28 w-28 place-items-center rounded-[26px] border-4 border-white bg-slate-900 text-4xl font-black text-white shadow-xl">
+                  {form.name?.charAt(0)?.toUpperCase() || "A"}
+                </div>
+              )}
+
+              <label className="absolute -bottom-2 -right-2 grid h-11 w-11 cursor-pointer place-items-center rounded-2xl border border-violet-200 bg-violet-600 text-white shadow-lg transition hover:bg-violet-700">
+                {photoUploading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <ImagePlus size={18} />
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={onPhotoUpload}
+                  disabled={photoUploading || saving}
+                  className="hidden"
+                />
+              </label>
+            </div>
 
             <div>
-              <h2 className="text-2xl font-black text-slate-950">
+              <p className="text-[11px] font-black uppercase tracking-[0.45em] text-violet-700">
+                Edit Admin Profile
+              </p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
                 {form.name || "MediLink Admin"}
               </h2>
-              <p className="mt-1 text-sm font-bold text-violet-700">
-                {form.designation || "System Administrator"}
+              <p className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-600">
+                <Mail size={16} className="text-violet-600" />
+                {user?.email || form.email || "No email profile"}
               </p>
-              <p className="mt-2 text-sm text-slate-500">
-                Email is connected from login account:{" "}
-                <span className="font-bold">{user?.email || form.email}</span>
+              <p className="mt-2 text-xs font-bold text-violet-600">
+                Click the camera button to upload a profile photo from your PC.
               </p>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormField
-              label="Admin Name"
-              name="name"
-              value={form.name}
-              onChange={onChange}
-              placeholder="MediLink Admin"
-            />
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving || photoUploading}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel Edit
+          </button>
+        </div>
+      </div>
 
+      <form onSubmit={onSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField
+            label="Admin Name"
+            name="name"
+            value={form.name}
+            onChange={onChange}
+            placeholder="MediLink Admin"
+          />
+
+          <FormField
+            label="Email"
+            name="email"
+            value={user?.email || form.email}
+            onChange={onChange}
+            placeholder="admin@medilink.com"
+            disabled
+          />
+
+          <FormField
+            label="Phone Number"
+            name="phone"
+            value={form.phone}
+            onChange={onChange}
+            placeholder="01XXXXXXXXX"
+          />
+
+          <FormField
+            label="Designation"
+            name="designation"
+            value={form.designation}
+            onChange={onChange}
+            placeholder="System Administrator"
+          />
+
+          <div className="md:col-span-2">
             <FormField
-              label="Email"
-              name="email"
-              value={user?.email || form.email}
+              label="Profile Photo Path"
+              name="imageUrl"
+              value={form.imageUrl}
               onChange={onChange}
-              placeholder="admin@medilink.com"
+              placeholder="Upload a photo to generate image path"
               disabled
             />
-
-            <FormField
-              label="Phone Number"
-              name="phone"
-              value={form.phone}
-              onChange={onChange}
-              placeholder="01XXXXXXXXX"
-            />
-
-            <FormField
-              label="Designation"
-              name="designation"
-              value={form.designation}
-              onChange={onChange}
-              placeholder="System Administrator"
-            />
-
-            <div className="md:col-span-2">
-              <FormField
-                label="Profile Photo URL"
-                name="imageUrl"
-                value={form.imageUrl}
-                onChange={onChange}
-                placeholder="https://example.com/admin-photo.jpg"
-              />
-            </div>
           </div>
+        </div>
 
+        <div className="mt-5">
           <TextAreaField
             label="Admin Bio / Responsibility"
             name="bio"
@@ -803,11 +1061,13 @@ function AdminProfileLayout({ user, form, saving, onChange, onSubmit }) {
             rows={4}
             placeholder="Write admin role and responsibilities."
           />
+        </div>
 
+        <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="submit"
-            disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saving || photoUploading}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 py-3.5 text-sm font-black text-white transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? (
               <Loader2 size={18} className="animate-spin" />
@@ -816,9 +1076,34 @@ function AdminProfileLayout({ user, form, saving, onChange, onSubmit }) {
             )}
             Save Admin Profile
           </button>
-        </form>
-      </Panel>
+
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving || photoUploading}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
     </section>
+  );
+}
+
+function ProfileInfoCard({ icon, label, value }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-5 grid h-11 w-11 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+        {icon}
+      </div>
+      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+        {label}
+      </p>
+      <p className="mt-2 break-words text-sm font-black text-slate-950">
+        {value || "Not set"}
+      </p>
+    </div>
   );
 }
 
