@@ -10,7 +10,6 @@ import {
   Database,
   FileCheck2,
   Headphones,
-  Home,
   Menu,
   RefreshCw,
   ShieldCheck,
@@ -178,7 +177,7 @@ function isMenuItemActive(item, location) {
 function getDashboardProfileTarget(role) {
   if (role === "doctor") return "/doctor-dashboard#profile";
   if (role === "admin") return "/admin-dashboard#profile";
-  return "";
+  return "/patient-dashboard#profile";
 }
 
 function removeDoctorPrefix(name = "") {
@@ -240,7 +239,7 @@ function Sidebar({
     sidebarUser?.role ||
     title;
 
-  const canEditProfile = role === "doctor" || role === "admin";
+  const canEditProfile = ["patient", "doctor", "admin"].includes(role);
 
   const goToProfile = () => {
     if (!canEditProfile) return;
@@ -532,15 +531,6 @@ export default function DashboardLayout({
                 </button>
               )}
 
-              {role !== "admin" && (
-                <Link
-                  to="/"
-                  className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 sm:inline-flex"
-                >
-                  <Home size={16} />
-                  Home
-                </Link>
-              )}
 
               <Link
                 to="/"

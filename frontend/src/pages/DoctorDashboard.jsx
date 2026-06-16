@@ -74,6 +74,41 @@ const emptyPayoutForm = {
   note: "",
 };
 
+const MEETING_LINKS_STORAGE_KEY = "medilink_doctor_meeting_links";
+
+function normalizeMeetingLink(value = "") {
+  const trimmedValue = String(value || "").trim();
+
+  if (!trimmedValue) return "";
+
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  return `https://${trimmedValue}`;
+}
+
+function readStoredMeetingLinks() {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const storedLinks = window.localStorage.getItem(MEETING_LINKS_STORAGE_KEY);
+    return storedLinks ? JSON.parse(storedLinks) || {} : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredMeetingLinks(links = {}) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(MEETING_LINKS_STORAGE_KEY, JSON.stringify(links));
+  } catch {
+    // Local storage is only a fallback cache. API save still works without it.
+  }
+}
+
 function getActiveView(hash) {
   if (hash === "#profile") return "profile";
   if (hash === "#appointments") return "appointments";
@@ -323,7 +358,8 @@ export default function DoctorDashboard() {
   const [payoutForm, setPayoutForm] = useState(emptyPayoutForm);
 
   const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [meetingLinks, setMeetingLinks] = useState({});
+  const [meetingLinks, setMeetingLinks] = useState(() => readStoredMeetingLinks());
+  const [savedMeetingLinkIds, setSavedMeetingLinkIds] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -382,10 +418,26 @@ export default function DoctorDashboard() {
         setPayoutRequests(paymentResponse?.payoutRequests || []);
 
         setMeetingLinks(
-          appointmentList.reduce((acc, appointment) => {
-            acc[appointment._id] = appointment.meetingLink || "";
-            return acc;
-          }, {})
+          (() => {
+            const storedMeetingLinks = readStoredMeetingLinks();
+            const hydratedMeetingLinks = appointmentList.reduce((acc, appointment) => {
+              const appointmentId = appointment._id;
+              const databaseMeetingLink = normalizeMeetingLink(appointment.meetingLink);
+              const cachedMeetingLink = normalizeMeetingLink(
+                storedMeetingLinks[appointmentId]
+              );
+
+              acc[appointmentId] = databaseMeetingLink || cachedMeetingLink || "";
+              return acc;
+            }, {});
+
+            writeStoredMeetingLinks({
+              ...storedMeetingLinks,
+              ...hydratedMeetingLinks,
+            });
+
+            return hydratedMeetingLinks;
+          })()
         );
         setLastSynced(new Date().toISOString());
 
@@ -594,20 +646,62 @@ export default function DoctorDashboard() {
       ...previous,
       [appointmentId]: value,
     }));
+
+    setSavedMeetingLinkIds((previous) => ({
+      ...previous,
+      [appointmentId]: false,
+    }));
   };
 
   const handleMeetingLinkSave = async (appointmentId) => {
     try {
+      const normalizedLink = normalizeMeetingLink(meetingLinks[appointmentId]);
+
+      if (!normalizedLink) {
+        setError("Please paste a valid video meeting link first.");
+        return;
+      }
+
       setActionLoading(true);
       setError("");
       setSuccess("");
 
-      await appointmentApi.updateStatus(appointmentId, {
-        meetingLink: meetingLinks[appointmentId] || "",
+      const response = await appointmentApi.updateStatus(appointmentId, {
+        meetingLink: normalizedLink,
       });
 
-      setSuccess("Meeting link saved successfully.");
-      await fetchDashboardData(true);
+      const savedLink = normalizeMeetingLink(
+        response.appointment?.meetingLink || normalizedLink
+      );
+
+      setAppointments((previous) =>
+        previous.map((appointment) =>
+          appointment._id === appointmentId
+            ? {
+                ...appointment,
+                ...(response.appointment || {}),
+                meetingLink: savedLink,
+              }
+            : appointment
+        )
+      );
+
+      setMeetingLinks((previous) => {
+        const nextLinks = {
+          ...previous,
+          [appointmentId]: savedLink,
+        };
+
+        writeStoredMeetingLinks(nextLinks);
+        return nextLinks;
+      });
+
+      setSavedMeetingLinkIds((previous) => ({
+        ...previous,
+        [appointmentId]: true,
+      }));
+
+      setSuccess("Meeting link saved successfully. Patient can now join the video call.");
     } catch (err) {
       setError(err.message || "Failed to save meeting link.");
     } finally {
@@ -805,6 +899,7 @@ export default function DoctorDashboard() {
           todayAppointments={todayAppointments}
           missingMeetingLinkAppointments={missingMeetingLinkAppointments}
           meetingLinks={meetingLinks}
+          savedMeetingLinkIds={savedMeetingLinkIds}
           actionLoading={actionLoading}
           hasPrescriptionForAppointment={hasPrescriptionForAppointment}
           onMeetingLinkChange={handleMeetingLinkChange}
@@ -1329,6 +1424,7 @@ function AppointmentsLayout({
   todayAppointments,
   missingMeetingLinkAppointments,
   meetingLinks,
+  savedMeetingLinkIds,
   actionLoading,
   hasPrescriptionForAppointment,
   onMeetingLinkChange,
@@ -1423,8 +1519,17 @@ function AppointmentsLayout({
               const alreadyPrescribed = hasPrescriptionForAppointment(
                 appointment._id
               );
-              const currentMeetingLink =
-                meetingLinks[appointment._id] || appointment.meetingLink || "";
+              const draftMeetingLink = normalizeMeetingLink(
+                meetingLinks[appointment._id]
+              );
+              const savedMeetingLink = normalizeMeetingLink(appointment.meetingLink);
+              const hasUnsavedMeetingLink =
+                Boolean(draftMeetingLink) && draftMeetingLink !== savedMeetingLink;
+              const isMeetingLinkSaved =
+                Boolean(savedMeetingLink) && !hasUnsavedMeetingLink;
+              const isMeetingLinkJustSaved = Boolean(
+                savedMeetingLinkIds?.[appointment._id]
+              );
               const appointmentFee = getAppointmentFee(appointment);
 
               return (
@@ -1499,7 +1604,17 @@ function AppointmentsLayout({
                         Video Meeting Link
                       </label>
 
-                      {!currentMeetingLink && (
+                      {isMeetingLinkSaved ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700">
+                          <CheckCircle2 size={13} />
+                          {isMeetingLinkJustSaved ? "Link saved" : "Saved link"}
+                        </span>
+                      ) : hasUnsavedMeetingLink ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-3 py-1 text-[11px] font-black text-cyan-700">
+                          <Save size={13} />
+                          Save to publish
+                        </span>
+                      ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-black text-amber-700">
                           <AlertCircle size={13} />
                           Link required
@@ -1509,7 +1624,7 @@ function AppointmentsLayout({
 
                     <div className="flex flex-col gap-2 md:flex-row">
                       <input
-                        value={meetingLinks[appointment._id] || ""}
+                        value={meetingLinks[appointment._id] || savedMeetingLink || ""}
                         onChange={(event) =>
                           onMeetingLinkChange(
                             appointment._id,
@@ -1522,17 +1637,23 @@ function AppointmentsLayout({
 
                       <button
                         type="button"
-                        disabled={actionLoading}
+                        disabled={
+                          actionLoading ||
+                          !normalizeMeetingLink(
+                            meetingLinks[appointment._id] || savedMeetingLink
+                          ) ||
+                          isMeetingLinkSaved
+                        }
                         onClick={() => onMeetingLinkSave(appointment._id)}
                         className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Save Link
+                        {isMeetingLinkSaved ? "Saved" : "Save Link"}
                       </button>
                     </div>
 
-                    {currentMeetingLink && (
+                    {savedMeetingLink ? (
                       <a
-                        href={currentMeetingLink}
+                        href={savedMeetingLink}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-3 inline-flex items-center gap-2 rounded-xl bg-cyan-50 px-3 py-2 text-sm font-black text-cyan-700 hover:bg-cyan-100"
@@ -1540,7 +1661,11 @@ function AppointmentsLayout({
                         <Video size={16} />
                         Join video call
                       </a>
-                    )}
+                    ) : hasUnsavedMeetingLink ? (
+                      <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">
+                        Save the link first so it stays with this appointment and patients can join from their side.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
