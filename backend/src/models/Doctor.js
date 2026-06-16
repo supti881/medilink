@@ -29,11 +29,13 @@ const availableSlotSchema = new mongoose.Schema(
     capacity: {
       type: Number,
       default: 5,
+      min: 1,
     },
 
     bookedCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     isActive: {
@@ -105,6 +107,7 @@ const doctorSchema = new mongoose.Schema(
 
     imageUrl: {
       type: String,
+      trim: true,
       default: "",
     },
 
@@ -123,18 +126,49 @@ const doctorSchema = new mongoose.Schema(
     totalReviews: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     status: {
       type: String,
-      enum: ["active", "inactive", "pending"],
-      default: "active",
+      enum: ["pending", "active", "inactive", "rejected", "blocked"],
+      default: "pending",
+    },
+
+    adminNote: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
+
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
+
+    rejectedAt: {
+      type: Date,
+      default: null,
     },
   },
   {
     timestamps: true,
   }
 );
+
+doctorSchema.index({ status: 1, createdAt: -1 });
+doctorSchema.index({ specialization: 1, department: 1 });
 
 const Doctor = mongoose.model("Doctor", doctorSchema);
 

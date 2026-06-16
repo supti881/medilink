@@ -33,7 +33,7 @@ const replacementRequestSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["submitted", "under_review", "approved", "rejected"],
+      enum: ["submitted", "under_review", "approved", "rejected", "issued"],
       default: "submitted",
     },
 
@@ -49,19 +49,48 @@ const replacementRequestSchema = new mongoose.Schema(
       default: "",
     },
 
+    rejectionReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     reviewedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null,
     },
 
     reviewedAt: {
       type: Date,
+      default: null,
+    },
+
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+
+    rejectedAt: {
+      type: Date,
+      default: null,
+    },
+
+    issuedAt: {
+      type: Date,
+      default: null,
     },
   },
   {
     timestamps: true,
   }
 );
+
+replacementRequestSchema.index({ patient: 1, createdAt: -1 });
+replacementRequestSchema.index({ status: 1, createdAt: -1 });
+replacementRequestSchema.index({ requestType: 1, createdAt: -1 });
+replacementRequestSchema.index({ paymentStatus: 1, createdAt: -1 });
+replacementRequestSchema.index({ prescriptionToken: 1 });
 
 const ReplacementRequest = mongoose.model(
   "ReplacementRequest",

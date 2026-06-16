@@ -27,9 +27,21 @@ const paymentSchema = new mongoose.Schema(
       min: 0,
     },
 
+    platformFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    doctorAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     paymentMethod: {
       type: String,
-      enum: ["bkash", "nagad", "rocket", "card", "cash", "mock"],
+      enum: ["bkash", "nagad", "rocket", "card", "cash", "bank", "mock"],
       default: "mock",
     },
 
@@ -42,15 +54,52 @@ const paymentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["pending", "paid", "failed", "refunded"],
+      enum: ["pending", "paid", "failed", "refunded", "cancelled"],
       default: "pending",
     },
 
     paymentDate: {
       type: Date,
+      default: null,
     },
 
-   
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    verifiedAt: {
+      type: Date,
+      default: null,
+    },
+
+    failedAt: {
+      type: Date,
+      default: null,
+    },
+
+    refundedAt: {
+      type: Date,
+      default: null,
+    },
+
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+
+    refundReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    adminNote: {
+      type: String,
+      trim: true,
+      default: "",
+    },
 
     gatewayResponse: {
       type: Object,
@@ -61,6 +110,11 @@ const paymentSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+paymentSchema.index({ patient: 1, createdAt: -1 });
+paymentSchema.index({ doctor: 1, createdAt: -1 });
+paymentSchema.index({ status: 1, createdAt: -1 });
+paymentSchema.index({ paymentMethod: 1, createdAt: -1 });
 
 const Payment = mongoose.model("Payment", paymentSchema);
 
