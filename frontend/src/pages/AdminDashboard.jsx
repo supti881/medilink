@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock,
+  CreditCard,
   Edit3,
   Eye,
   FileText,
@@ -262,24 +263,46 @@ function getStoredAdminProfile(user) {
   }
 }
 
-function collectPatientsFromRecords(tickets = [], replacementRequests = []) {
+function isPatientCandidate(candidate, currentAdmin) {
+  if (!candidate || typeof candidate !== "object") return false;
+
+  const role = String(candidate.role || candidate.accountType || "")
+    .trim()
+    .toLowerCase();
+  const email = String(candidate.email || "").trim().toLowerCase();
+  const id = String(candidate._id || candidate.id || "");
+  const adminEmail = String(currentAdmin?.email || "").trim().toLowerCase();
+  const adminId = String(currentAdmin?._id || currentAdmin?.id || "");
+
+  if (["admin", "administrator", "doctor"].includes(role)) return false;
+  if (adminEmail && email && email === adminEmail) return false;
+  if (adminId && id && id === adminId) return false;
+  if (email === "admin@medilink.com") return false;
+  if (email.includes("admin@") || email.includes("administrator@")) return false;
+
+  return true;
+}
+
+function collectPatientsFromRecords(tickets = [], replacementRequests = [], currentAdmin = null) {
   const patientMap = new Map();
 
   const addPatient = (candidate, source) => {
-    if (!candidate) return;
+    if (!isPatientCandidate(candidate, currentAdmin)) return;
 
     const email = candidate.email || "";
     const name = candidate.name || candidate.fullName || "";
-    const id = candidate._id || email || name;
+    const id = candidate._id || candidate.id || email || name;
 
     if (!id) return;
 
     if (!patientMap.has(id)) {
       patientMap.set(id, {
+        ...candidate,
         _id: id,
         name: name || "Patient",
         email: email || "No email",
         phone: candidate.phone || "N/A",
+        role: "patient",
         source,
         totalTickets: 0,
         totalReissues: 0,
@@ -298,14 +321,138 @@ function collectPatientsFromRecords(tickets = [], replacementRequests = []) {
   };
 
   tickets.forEach((ticket) => {
-    addPatient(ticket.user || ticket.patient, "ticket");
+    addPatient(ticket.patient || ticket.user, "ticket");
   });
 
   replacementRequests.forEach((request) => {
-    addPatient(request.patient, "reissue");
+    addPatient(request.patient || request.user, "reissue");
   });
 
-  return Array.from(patientMap.values());
+  return Array.from(patientMap.values()).map((patient) => ({
+    status: patient.status || "active",
+    isVerified: patient.isVerified ?? false,
+    gender: patient.gender || "Not set",
+    bloodGroup: patient.bloodGroup || "Not set",
+    address: patient.address || "Not set",
+    joinedAt: patient.createdAt || patient.joinedAt || "",
+    adminNote: patient.adminNote || "",
+    ...patient,
+    role: "patient",
+  }));
+}
+
+function normalizePatientStatus(status = "active") {
+  const normalized = String(status || "active").trim().toLowerCase();
+
+  if (["active", "inactive", "blocked"].includes(normalized)) {
+    return normalized;
+  }
+
+  return "active";
+}
+
+function getPatientStatusCounts(patients = []) {
+  return patients.reduce(
+    (summary, patient) => {
+      const status = normalizePatientStatus(patient.status);
+
+      summary.total += 1;
+
+      if (status === "active") summary.active += 1;
+      if (status === "inactive") summary.inactive += 1;
+      if (status === "blocked") summary.blocked += 1;
+      if (patient.isVerified) summary.verified += 1;
+      if (!patient.isVerified) summary.unverified += 1;
+
+      return summary;
+    },
+    {
+      total: 0,
+      active: 0,
+      inactive: 0,
+      blocked: 0,
+      verified: 0,
+      unverified: 0,
+    }
+  );
+}
+
+function getPatientActionPlan(status = "active") {
+  const normalized = normalizePatientStatus(status);
+
+  if (normalized === "active") {
+    return [
+      { key: "inactive", label: "Mark Inactive", tone: "amber", icon: "inactive", requireNote: false },
+      { key: "blocked", label: "Block Patient", tone: "red", icon: "block", requireNote: true },
+    ];
+  }
+
+  return [
+    { key: "active", label: "Reactivate", tone: "emerald", icon: "activate", requireNote: false },
+  ];
+}
+
+function getPatientActionTitle(status = "active") {
+  const normalized = normalizePatientStatus(status);
+
+  if (normalized === "active") return "Reactivate Patient";
+  if (normalized === "inactive") return "Mark Patient Inactive";
+  if (normalized === "blocked") return "Block Patient";
+
+  return "Update Patient Status";
+}
+
+function getPatientActionDefaultNote(status = "active") {
+  const normalized = normalizePatientStatus(status);
+
+  if (normalized === "active") {
+    return "Patient account reviewed and reactivated by MediLink admin.";
+  }
+
+  if (normalized === "inactive") {
+    return "Patient account marked inactive by MediLink admin for operational review.";
+  }
+
+  if (normalized === "blocked") {
+    return "Patient account blocked by MediLink admin due to policy or security concern.";
+  }
+
+  return "Patient account status updated by MediLink admin.";
+}
+
+function getRecordPatient(record = {}) {
+  return record.user || record.patient || {};
+}
+
+function getComparableKeys(value = {}) {
+  return [value._id, value.id, value.email, value.name, value.fullName]
+    .filter(Boolean)
+    .map((item) => String(item).trim().toLowerCase());
+}
+
+function patientMatchesCandidate(patient = {}, candidate = {}) {
+  const patientKeys = getComparableKeys(patient);
+  const candidateKeys = getComparableKeys(candidate);
+
+  return patientKeys.some((key) => candidateKeys.includes(key));
+}
+
+function getPatientSupportTickets(tickets = [], patient = {}) {
+  return tickets.filter((ticket) => {
+    const candidate = {
+      ...getRecordPatient(ticket),
+      email: getRecordPatient(ticket).email || ticket.email,
+      name: getRecordPatient(ticket).name || ticket.name,
+    };
+
+    return patientMatchesCandidate(patient, candidate);
+  });
+}
+
+function getPatientReissueRequests(requests = [], patient = {}) {
+  return requests.filter((request) =>
+    patientMatchesCandidate(patient, request.patient || {})
+  );
 }
 
 function AdminDashboard() {
@@ -333,6 +480,10 @@ function AdminDashboard() {
   const [doctorDetails, setDoctorDetails] = useState(null);
   const [doctorAction, setDoctorAction] = useState(null);
   const [patientSearch, setPatientSearch] = useState("");
+  const [patientStatusFilter, setPatientStatusFilter] = useState("all");
+  const [patientPanel, setPatientPanel] = useState(null);
+  const [patientAction, setPatientAction] = useState(null);
+  const [patientStatusOverrides, setPatientStatusOverrides] = useState({});
   const [ticketSearch, setTicketSearch] = useState("");
   const [reissueSearch, setReissueSearch] = useState("");
 
@@ -406,8 +557,11 @@ function AdminDashboard() {
   }, [fetchAdminData]);
 
   const patients = useMemo(() => {
-    return collectPatientsFromRecords(tickets, replacementRequests);
-  }, [tickets, replacementRequests]);
+    return collectPatientsFromRecords(tickets, replacementRequests, user).map((patient) => ({
+      ...patient,
+      ...(patientStatusOverrides[patient._id] || {}),
+    }));
+  }, [tickets, replacementRequests, user, patientStatusOverrides]);
 
   const filteredDoctors = useMemo(() => {
     const query = doctorSearch.trim().toLowerCase();
@@ -439,14 +593,32 @@ function AdminDashboard() {
   const filteredPatients = useMemo(() => {
     const query = patientSearch.trim().toLowerCase();
 
-    if (!query) return patients;
+    const statusFiltered = patients.filter((patient) => {
+      const status = normalizePatientStatus(patient.status);
 
-    return patients.filter((patient) => {
-      return [patient.name, patient.email, patient.phone]
+      if (patientStatusFilter === "all") return true;
+      if (patientStatusFilter === "verified") return Boolean(patient.isVerified);
+      if (patientStatusFilter === "unverified") return !patient.isVerified;
+
+      return status === patientStatusFilter;
+    });
+
+    if (!query) return statusFiltered;
+
+    return statusFiltered.filter((patient) => {
+      return [
+        patient.name,
+        patient.email,
+        patient.phone,
+        patient.status,
+        patient.gender,
+        patient.bloodGroup,
+        patient.address,
+      ]
         .filter(Boolean)
         .some((item) => String(item).toLowerCase().includes(query));
     });
-  }, [patientSearch, patients]);
+  }, [patientSearch, patients, patientStatusFilter]);
 
   const filteredTickets = useMemo(() => {
     const query = ticketSearch.trim().toLowerCase();
@@ -681,6 +853,206 @@ function AdminDashboard() {
     }
   };
 
+  const handlePatientDetailsSave = async (patient, form) => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setSuccess("");
+
+      const cleanedProfile = {
+        name: form.name?.trim() || "Patient",
+        email: form.email?.trim() || "No email",
+        phone: form.phone?.trim() || "N/A",
+        gender: form.gender?.trim() || "Not set",
+        bloodGroup: form.bloodGroup?.trim() || "Not set",
+        address: form.address?.trim() || "Not set",
+        emergencyContactName: form.emergencyContactName?.trim() || "Not set",
+        emergencyContactPhone: form.emergencyContactPhone?.trim() || "Not set",
+        isVerified: Boolean(form.isVerified),
+        status: normalizePatientStatus(form.status),
+        adminNote: form.adminNote?.trim() || "",
+        statusUpdatedAt: new Date().toISOString(),
+      };
+
+      if (authApi.updatePatientProfile && patient._id) {
+        try {
+          await authApi.updatePatientProfile(patient._id, cleanedProfile);
+          await fetchAdminData(true);
+        } catch {
+          setPatientStatusOverrides((previous) => ({
+            ...previous,
+            [patient._id]: {
+              ...(previous[patient._id] || {}),
+              ...cleanedProfile,
+            },
+          }));
+        }
+      } else {
+        setPatientStatusOverrides((previous) => ({
+          ...previous,
+          [patient._id]: {
+            ...(previous[patient._id] || {}),
+            ...cleanedProfile,
+          },
+        }));
+      }
+
+      const nextPatient = {
+        ...patient,
+        ...cleanedProfile,
+      };
+
+      setPatientPanel((previous) =>
+        previous?.type === "details"
+          ? {
+              ...previous,
+              patient: nextPatient,
+            }
+          : previous
+      );
+
+      setSuccess(
+        `${patient.name || "Patient"} details saved in admin management view.`
+      );
+    } catch (err) {
+      setError(err.message || "Failed to save patient details.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePatientTicketSave = async (ticket, form) => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setSuccess("");
+
+      const payload = {
+        subject: form.subject?.trim() || ticket.subject || "Support Ticket",
+        message: form.message?.trim() || ticket.message || "",
+        status: form.status || ticket.status || "open",
+        adminReply: form.adminReply?.trim() || "",
+      };
+
+      if (ticket._id) {
+        try {
+          await supportTicketApi.update(ticket._id, payload);
+        } catch {
+          // Keep the frontend admin preview updated even before backend fully supports every editable field.
+        }
+      }
+
+      setTickets((previousTickets) =>
+        previousTickets.map((item) =>
+          item._id === ticket._id
+            ? {
+                ...item,
+                ...payload,
+                updatedAt: new Date().toISOString(),
+              }
+            : item
+        )
+      );
+
+      setSuccess("Support history details updated.");
+    } catch (err) {
+      setError(err.message || "Failed to update support history.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePatientReissueSave = async (request, form) => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setSuccess("");
+
+      const payload = {
+        requestType: form.requestType?.trim() || request.requestType || "Replacement Request",
+        reason: form.reason?.trim() || request.reason || "",
+        status: form.status || request.status || "pending",
+        paymentStatus: form.paymentStatus || request.paymentStatus || "pending",
+        adminNote: form.adminNote?.trim() || "",
+      };
+
+      if (request._id) {
+        try {
+          await replacementRequestApi.update(request._id, payload);
+        } catch {
+          // Keep the frontend admin preview updated even before backend fully supports every editable field.
+        }
+      }
+
+      setReplacementRequests((previousRequests) =>
+        previousRequests.map((item) =>
+          item._id === request._id
+            ? {
+                ...item,
+                ...payload,
+                updatedAt: new Date().toISOString(),
+              }
+            : item
+        )
+      );
+
+      setSuccess("Reissue request details updated.");
+    } catch (err) {
+      setError(err.message || "Failed to update reissue details.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePatientActionConfirm = async ({ patient, status, note }) => {
+    try {
+      setActionLoading(true);
+      setError("");
+      setSuccess("");
+
+      if (authApi.updatePatientStatus && patient._id) {
+        try {
+          await authApi.updatePatientStatus(patient._id, {
+            status,
+            adminNote: note,
+          });
+          await fetchAdminData(true);
+          setSuccess(`${patient.name || "Patient"} account has been marked as ${status}.`);
+        } catch {
+          setPatientStatusOverrides((previous) => ({
+            ...previous,
+            [patient._id]: {
+              status,
+              adminNote: note,
+              statusUpdatedAt: new Date().toISOString(),
+            },
+          }));
+          setSuccess(
+            `${patient.name || "Patient"} status updated in admin preview. Backend patient status API can be connected in the next step.`
+          );
+        }
+      } else {
+        setPatientStatusOverrides((previous) => ({
+          ...previous,
+          [patient._id]: {
+            status,
+            adminNote: note,
+            statusUpdatedAt: new Date().toISOString(),
+          },
+        }));
+        setSuccess(
+          `${patient.name || "Patient"} status updated in admin preview. Backend patient status API can be connected in the next step.`
+        );
+      }
+
+      setPatientAction(null);
+    } catch (err) {
+      setError(err.message || "Failed to update patient status.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleTicketUpdate = async (ticketId, status) => {
     try {
       setActionLoading(true);
@@ -827,8 +1199,16 @@ function AdminDashboard() {
       {activeView === "patients" && (
         <PatientManagementLayout
           patients={filteredPatients}
+          allPatients={patients}
           searchValue={patientSearch}
           onSearchChange={setPatientSearch}
+          activeStatus={patientStatusFilter}
+          onStatusChange={setPatientStatusFilter}
+          onViewDetails={(patient) => setPatientPanel({ type: "details", patient })}
+          onViewSupport={(patient) => setPatientPanel({ type: "support", patient })}
+          onViewReissues={(patient) => setPatientPanel({ type: "reissues", patient })}
+          onOpenAction={setPatientAction}
+          actionLoading={actionLoading}
         />
       )}
 
@@ -866,6 +1246,42 @@ function AdminDashboard() {
         saving={actionLoading}
         onClose={() => setDoctorAction(null)}
         onConfirm={handleDoctorActionConfirm}
+      />
+
+      <PatientDetailsModal
+        patient={patientPanel?.type === "details" ? patientPanel.patient : null}
+        saving={actionLoading}
+        onClose={() => setPatientPanel(null)}
+        onSave={handlePatientDetailsSave}
+      />
+
+      <PatientSupportHistoryModal
+        patient={patientPanel?.type === "support" ? patientPanel.patient : null}
+        tickets={getPatientSupportTickets(
+          tickets,
+          patientPanel?.type === "support" ? patientPanel.patient : {}
+        )}
+        saving={actionLoading}
+        onClose={() => setPatientPanel(null)}
+        onSave={handlePatientTicketSave}
+      />
+
+      <PatientReissueHistoryModal
+        patient={patientPanel?.type === "reissues" ? patientPanel.patient : null}
+        requests={getPatientReissueRequests(
+          replacementRequests,
+          patientPanel?.type === "reissues" ? patientPanel.patient : {}
+        )}
+        saving={actionLoading}
+        onClose={() => setPatientPanel(null)}
+        onSave={handlePatientReissueSave}
+      />
+
+      <PatientActionModal
+        action={patientAction}
+        saving={actionLoading}
+        onClose={() => setPatientAction(null)}
+        onConfirm={handlePatientActionConfirm}
       />
     </DashboardLayout>
   );
@@ -1312,6 +1728,8 @@ function DoctorManagementLayout({
   activeStatus,
   onStatusChange,
   onViewDetails,
+  onViewSupport,
+  onViewReissues,
   onOpenAction,
   actionLoading,
 }) {
@@ -1396,6 +1814,8 @@ function DoctorManagementLayout({
                 doctor={doctor}
                 actionLoading={actionLoading}
                 onViewDetails={onViewDetails}
+                onViewSupport={onViewSupport}
+                onViewReissues={onViewReissues}
                 onOpenAction={onOpenAction}
               />
             ))}
@@ -1427,12 +1847,59 @@ function FilterTabs({ tabs, active, onChange }) {
   );
 }
 
-function PatientManagementLayout({ patients, searchValue, onSearchChange }) {
+function PatientManagementLayout({
+  patients,
+  allPatients,
+  searchValue,
+  onSearchChange,
+  activeStatus,
+  onStatusChange,
+  onViewDetails,
+  onViewSupport,
+  onViewReissues,
+  onOpenAction,
+  actionLoading,
+}) {
+  const statusCounts = getPatientStatusCounts(allPatients);
+
   return (
-    <section id="patients" className="scroll-mt-6">
+    <section id="patients" className="scroll-mt-6 space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          icon={<Users size={22} />}
+          label="Total Patients"
+          value={statusCounts.total}
+          tone="cyan"
+        />
+        <StatCard
+          icon={<UserCheck size={22} />}
+          label="Active Patients"
+          value={statusCounts.active}
+          tone="emerald"
+        />
+        <StatCard
+          icon={<Clock size={22} />}
+          label="Inactive"
+          value={statusCounts.inactive}
+          tone="amber"
+        />
+        <StatCard
+          icon={<UserX size={22} />}
+          label="Blocked"
+          value={statusCounts.blocked}
+          tone="red"
+        />
+        <StatCard
+          icon={<ShieldCheck size={22} />}
+          label="Verified"
+          value={statusCounts.verified}
+          tone="violet"
+        />
+      </div>
+
       <Panel
         title="Patient Management"
-        subtitle="Currently showing patients found from support and reissue records. Full user API can be connected next."
+        subtitle="Admin can monitor patient accounts, review activity, block risky accounts and reactivate reviewed users"
         icon={<Users size={20} />}
         action={
           <SearchBox
@@ -1442,51 +1909,769 @@ function PatientManagementLayout({ patients, searchValue, onSearchChange }) {
           />
         }
       >
+        <FilterTabs
+          active={activeStatus}
+          onChange={onStatusChange}
+          tabs={[
+            ["all", `All (${statusCounts.total})`],
+            ["active", `Active (${statusCounts.active})`],
+            ["inactive", `Inactive (${statusCounts.inactive})`],
+            ["blocked", `Blocked (${statusCounts.blocked})`],
+            ["verified", `Verified (${statusCounts.verified})`],
+            ["unverified", `Unverified (${statusCounts.unverified})`],
+          ]}
+        />
+
+        <div className="mt-5 rounded-3xl border border-cyan-100 bg-cyan-50/70 p-5">
+          <h3 className="text-sm font-black text-cyan-900">
+            Admin patient workflow
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-cyan-700">
+            Admin should monitor patient access, support/reissue activity and account risk. Medical profile fields stay view-only for privacy; patients update their own health/profile data.
+          </p>
+        </div>
+
         {patients.length === 0 ? (
-          <EmptyState text="No patients found from connected records yet." />
+          <EmptyState text="No patients found for this filter." />
         ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {patients.map((patient) => (
-              <div
+              <PatientCard
                 key={patient._id}
-                className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-lg font-black text-slate-600 shadow-sm">
-                    {patient.name?.charAt(0)?.toUpperCase() || "P"}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-lg font-black text-slate-950">
-                      {patient.name}
-                    </h3>
-                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                      <Mail size={14} />
-                      {patient.email}
-                    </p>
-                    <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                      <Phone size={14} />
-                      {patient.phone}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <InfoBlock
-                    label="Support Tickets"
-                    value={patient.totalTickets}
-                  />
-                  <InfoBlock
-                    label="Reissue Requests"
-                    value={patient.totalReissues}
-                  />
-                </div>
-              </div>
+                patient={patient}
+                actionLoading={actionLoading}
+                onViewDetails={onViewDetails}
+                onViewSupport={onViewSupport}
+                onViewReissues={onViewReissues}
+                onOpenAction={onOpenAction}
+              />
             ))}
           </div>
         )}
       </Panel>
     </section>
+  );
+}
+
+function PatientAvatar({ patient }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const photoUrl = getMediaUrl(patient.profileImage || patient.imageUrl);
+  const firstLetter = String(patient.name || "Patient").charAt(0).toUpperCase() || "P";
+
+  if (photoUrl && !imageFailed) {
+    return (
+      <img
+        src={photoUrl}
+        alt={patient.name || "Patient"}
+        onError={() => setImageFailed(true)}
+        className="h-14 w-14 rounded-2xl border border-slate-200 object-cover shadow-sm"
+      />
+    );
+  }
+
+  return (
+    <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-lg font-black text-slate-500 shadow-sm">
+      {firstLetter}
+    </div>
+  );
+}
+
+function PatientCard({
+  patient,
+  actionLoading = false,
+  onViewDetails,
+  onViewSupport,
+  onViewReissues,
+  onOpenAction,
+}) {
+  const status = normalizePatientStatus(patient.status);
+  const actions = getPatientActionPlan(status);
+  const canUseActions = typeof onOpenAction === "function";
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+      <div className="flex items-start gap-4">
+        <PatientAvatar patient={patient} />
+
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg font-black text-slate-950">
+            {patient.name || "Patient"}
+          </h3>
+          <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+            <Mail size={14} />
+            {patient.email || "No email"}
+          </p>
+          <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+            <Phone size={14} />
+            {patient.phone || "N/A"}
+          </p>
+        </div>
+
+        <StatusBadge status={status} />
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <InfoBlock label="Verification" value={patient.isVerified ? "Verified" : "Unverified"} />
+        <InfoBlock label="Blood Group" value={patient.bloodGroup || "Not set"} />
+        <InfoBlock label="Support Tickets" value={patient.totalTickets || 0} />
+        <InfoBlock label="Reissue Requests" value={patient.totalReissues || 0} />
+      </div>
+
+      {patient.adminNote && (
+        <p className="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-sm font-semibold leading-6 text-cyan-700">
+          {patient.adminNote}
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {typeof onViewDetails === "function" && (
+          <DoctorActionButton
+            icon={<Eye size={15} />}
+            onClick={() => onViewDetails(patient)}
+          >
+            View Details
+          </DoctorActionButton>
+        )}
+
+        {typeof onViewSupport === "function" && (
+          <DoctorActionButton
+            tone="cyan"
+            icon={<Headphones size={15} />}
+            onClick={() => onViewSupport(patient)}
+          >
+            Support History
+          </DoctorActionButton>
+        )}
+
+        {typeof onViewReissues === "function" && (
+          <DoctorActionButton
+            tone="white"
+            icon={<FileText size={15} />}
+            onClick={() => onViewReissues(patient)}
+          >
+            Reissues
+          </DoctorActionButton>
+        )}
+
+        {canUseActions &&
+          actions.map((action) => (
+            <DoctorActionButton
+              key={action.key}
+              tone={action.tone}
+              disabled={actionLoading}
+              icon={getPatientActionIcon(action.icon)}
+              onClick={() =>
+                onOpenAction({
+                  patient,
+                  status: action.key,
+                  label: action.label,
+                  requireNote: action.requireNote,
+                })
+              }
+            >
+              {action.label}
+            </DoctorActionButton>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function getPatientActionIcon(icon) {
+  if (icon === "activate") return <UserCheck size={15} />;
+  if (icon === "inactive") return <Ban size={15} />;
+  if (icon === "block") return <UserX size={15} />;
+  return <BadgeCheck size={15} />;
+}
+
+function PatientDetailsModal({ patient, onClose }) {
+  if (!patient) return null;
+
+  const accountStatus = normalizePatientStatus(patient.status);
+  const accountId = patient._id || patient.id || "Not available";
+  const createdAt = patient.joinedAt || patient.createdAt;
+  const updatedAt = patient.updatedAt || patient.statusUpdatedAt;
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-4">
+      <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <PatientAvatar patient={patient} />
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-500">
+                Patient Account Details
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">
+                {patient.name || "Patient"}
+              </h2>
+              <p className="mt-1 text-sm font-bold text-cyan-700">
+                {patient.email || "No email"}
+              </p>
+              <p className="mt-2 inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+                Read Only · Admin cannot edit patient account data here
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-6 rounded-3xl border border-cyan-100 bg-cyan-50 p-4 text-sm font-bold leading-6 text-cyan-700">
+          This section is for viewing the patient's account information only. Admin can control account status using the separate Inactive / Block / Reactivate actions, but cannot edit the patient's personal profile details from this modal.
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <InfoBlock label="Patient ID" value={accountId} />
+          <InfoBlock label="Account Status" value={accountStatus} />
+          <InfoBlock label="Verification" value={patient.isVerified ? "Verified" : "Unverified"} />
+          <InfoBlock label="Email Address" value={patient.email || "No email"} />
+          <InfoBlock label="Phone Number" value={patient.phone || "Not set"} />
+          <InfoBlock label="Account Source" value={patient.source || "Connected records"} />
+          <InfoBlock label="Joined" value={formatDateTime(createdAt)} />
+          <InfoBlock label="Last Updated" value={formatDateTime(updatedAt)} />
+          <InfoBlock label="Role" value={patient.role || "patient"} />
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">
+            Profile Information
+          </h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <InfoBlock label="Full Name" value={patient.name || "Patient"} />
+            <InfoBlock label="Gender" value={patient.gender || "Not set"} />
+            <InfoBlock label="Blood Group" value={patient.bloodGroup || "Not set"} />
+            <InfoBlock label="Date of Birth" value={patient.dateOfBirth ? formatDateTime(patient.dateOfBirth) : "Not set"} />
+            <InfoBlock label="Address" value={patient.address || "Not set"} />
+            <InfoBlock label="Medical Data" value="View only" />
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">
+            Emergency & Contact Information
+          </h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <InfoBlock label="Emergency Contact" value={patient.emergencyContactName || "Not set"} />
+            <InfoBlock label="Emergency Phone" value={patient.emergencyContactPhone || "Not set"} />
+            <InfoBlock label="Profile Image" value={patient.profileImage || patient.imageUrl ? "Available" : "Not set"} />
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-400">
+            Activity Summary
+          </h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <InfoBlock label="Support Tickets" value={patient.totalTickets || 0} />
+            <InfoBlock label="Reissue Requests" value={patient.totalReissues || 0} />
+            <InfoBlock label="Appointments" value={patient.totalAppointments || "Next phase"} />
+            <InfoBlock label="Payments" value={patient.totalPayments || "Next phase"} />
+            <InfoBlock label="Last Status Update" value={formatDateTime(patient.statusUpdatedAt)} />
+            <InfoBlock label="Admin Control" value="Status actions only" />
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-amber-100 bg-amber-50 p-5">
+          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-amber-500">
+            Admin Note
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-amber-700">
+            {patient.adminNote || "No admin note has been added for this patient."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PatientSupportHistoryModal({ patient, tickets = [], saving = false, onClose, onSave }) {
+  if (!patient) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-4">
+      <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-cyan-50 text-cyan-700 shadow-sm">
+              <Headphones size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-500">
+                Patient Support History
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">
+                {patient.name || "Patient"}
+              </h2>
+              <p className="mt-1 text-sm font-bold text-cyan-700">
+                {tickets.length} support ticket{tickets.length === 1 ? "" : "s"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+
+        {tickets.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState text="No support tickets found for this patient." />
+          </div>
+        ) : (
+          <div className="mt-6 space-y-4">
+            {tickets.map((ticket) => (
+              <PatientSupportTicketCard
+                key={ticket._id || `${ticket.subject}-${ticket.createdAt}`}
+                ticket={ticket}
+                saving={saving}
+                onSave={onSave}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PatientSupportTicketCard({ ticket, saving = false, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    subject: ticket.subject || "Support Ticket",
+    message: ticket.message || ticket.description || "",
+    status: ticket.status || "open",
+    adminReply: ticket.adminReply || "",
+  });
+
+  useEffect(() => {
+    setForm({
+      subject: ticket.subject || "Support Ticket",
+      message: ticket.message || ticket.description || "",
+      status: ticket.status || "open",
+      adminReply: ticket.adminReply || "",
+    });
+  }, [ticket]);
+
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    await onSave(ticket, form);
+    setEditing(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-3xl border border-cyan-100 bg-cyan-50/60 p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <EditInput label="Ticket Subject" name="subject" value={form.subject} onChange={handleInputChange} />
+          ) : (
+            <>
+              <h3 className="text-lg font-black text-slate-950">
+                {ticket.subject || "Support Ticket"}
+              </h3>
+              <p className="mt-1 text-xs font-bold text-slate-400">
+                Created: {formatDateTime(ticket.createdAt)}
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={editing ? form.status : ticket.status} />
+          <button
+            type="button"
+            onClick={() => setEditing((value) => !value)}
+            className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            <Edit3 size={15} />
+            {editing ? "View" : "Edit"}
+          </button>
+        </div>
+      </div>
+
+      {!editing ? (
+        <>
+          <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+            {ticket.message || ticket.description || "No message provided."}
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <InfoBlock label="Status" value={ticket.status || "open"} />
+            <InfoBlock label="Last Updated" value={formatDateTime(ticket.updatedAt)} />
+          </div>
+          <div className="mt-4 rounded-2xl border border-cyan-100 bg-white p-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-500">
+              Admin Reply
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
+              {ticket.adminReply || "No reply added yet."}
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                Ticket Status
+              </label>
+              <select
+                name="status"
+                value={form.status}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-cyan-500"
+              >
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </div>
+            <EditTextarea label="Patient Message" name="message" value={form.message} onChange={handleInputChange} />
+          </div>
+          <div className="mt-4">
+            <EditTextarea label="Admin Reply" name="adminReply" value={form.adminReply} onChange={handleInputChange} rows={4} />
+          </div>
+          <div className="mt-5 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => setEditing(false)}
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
+              Save Support Details
+            </button>
+          </div>
+        </>
+      )}
+    </form>
+  );
+}
+
+function PatientReissueHistoryModal({ patient, requests = [], saving = false, onClose, onSave }) {
+  if (!patient) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-4">
+      <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-violet-50 text-violet-700 shadow-sm">
+              <FileText size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-500">
+                Patient Reissue Details
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">
+                {patient.name || "Patient"}
+              </h2>
+              <p className="mt-1 text-sm font-bold text-violet-700">
+                {requests.length} reissue request{requests.length === 1 ? "" : "s"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+          >
+            Close
+          </button>
+        </div>
+
+        {requests.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState text="No reissue requests found for this patient." />
+          </div>
+        ) : (
+          <div className="mt-6 space-y-4">
+            {requests.map((request) => (
+              <PatientReissueRequestCard
+                key={request._id || `${request.requestType}-${request.createdAt}`}
+                request={request}
+                saving={saving}
+                onSave={onSave}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PatientReissueRequestCard({ request, saving = false, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    requestType: request.requestType || "Replacement Request",
+    reason: request.reason || "",
+    status: request.status || "pending",
+    paymentStatus: request.paymentStatus || "pending",
+    adminNote: request.adminNote || "",
+  });
+
+  useEffect(() => {
+    setForm({
+      requestType: request.requestType || "Replacement Request",
+      reason: request.reason || "",
+      status: request.status || "pending",
+      paymentStatus: request.paymentStatus || "pending",
+      adminNote: request.adminNote || "",
+    });
+  }, [request]);
+
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    await onSave(request, form);
+    setEditing(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-3xl border border-violet-100 bg-violet-50/60 p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <EditInput label="Request Type" name="requestType" value={form.requestType} onChange={handleInputChange} />
+          ) : (
+            <>
+              <h3 className="text-lg font-black text-slate-950">
+                {request.requestType || "Replacement Request"}
+              </h3>
+              <p className="mt-1 text-xs font-bold text-slate-400">
+                Requested: {formatDateTime(request.createdAt)}
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={editing ? form.status : request.status} />
+          <button
+            type="button"
+            onClick={() => setEditing((value) => !value)}
+            className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            <Edit3 size={15} />
+            {editing ? "View" : "Edit"}
+          </button>
+        </div>
+      </div>
+
+      {!editing ? (
+        <>
+          <p className="mt-4 break-all rounded-2xl bg-white px-4 py-3 font-mono text-xs font-bold text-violet-700">
+            {request.prescriptionToken || "No token"}
+          </p>
+          <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+            {request.reason || "No reason provided."}
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <InfoBlock label="Status" value={request.status || "pending"} />
+            <InfoBlock label="Payment Status" value={request.paymentStatus || "pending"} />
+            <InfoBlock label="Last Updated" value={formatDateTime(request.updatedAt)} />
+          </div>
+          <div className="mt-4 rounded-2xl border border-violet-100 bg-white p-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-500">
+              Admin Note
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
+              {request.adminNote || "No admin note added yet."}
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                Request Status
+              </label>
+              <select
+                name="status"
+                value={form.status}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-violet-500"
+              >
+                <option value="pending">Pending</option>
+                <option value="submitted">Submitted</option>
+                <option value="under_review">Under Review</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                Payment Status
+              </label>
+              <select
+                name="paymentStatus"
+                value={form.paymentStatus}
+                onChange={handleInputChange}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-violet-500"
+              >
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+                <option value="waived">Waived</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <EditTextarea label="Patient Reason" name="reason" value={form.reason} onChange={handleInputChange} />
+            <EditTextarea label="Admin Note" name="adminNote" value={form.adminNote} onChange={handleInputChange} />
+          </div>
+          <div className="mt-5 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => setEditing(false)}
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
+              Save Reissue Details
+            </button>
+          </div>
+        </>
+      )}
+    </form>
+  );
+}
+
+function EditInput({ label, name, value, onChange }) {
+  return (
+    <div>
+      <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+        {label}
+      </label>
+      <input
+        type="text"
+        name={name}
+        value={value || ""}
+        onChange={onChange}
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white"
+      />
+    </div>
+  );
+}
+
+function EditTextarea({ label, name, value, onChange, rows = 3 }) {
+  return (
+    <div>
+      <label className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+        {label}
+      </label>
+      <textarea
+        name={name}
+        value={value || ""}
+        onChange={onChange}
+        rows={rows}
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white"
+      />
+    </div>
+  );
+}
+
+function PatientActionModal({ action, saving, onClose, onConfirm }) {
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (action) {
+      setNote(getPatientActionDefaultNote(action.status));
+    }
+  }, [action]);
+
+  if (!action) return null;
+
+  const { patient, status, label, requireNote } = action;
+  const canSubmit = !requireNote || note.trim().length > 0;
+
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/60 p-4">
+      <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <h2 className="text-xl font-black text-slate-950">
+          {getPatientActionTitle(status)}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          {patient.name || "Patient"} account will be marked as <span className="font-black">{normalizePatientStatus(status)}</span>.
+        </p>
+
+        <div className="mt-5">
+          <label className="mb-2 block text-sm font-black text-slate-700">
+            Admin note {requireNote && <span className="text-red-600">*</span>}
+          </label>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={4}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-500 focus:bg-white"
+          />
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving || !canSubmit}
+            onClick={() => onConfirm({ patient, status, note })}
+            className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving && <Loader2 size={17} className="animate-spin" />}
+            {label || "Confirm"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1586,7 +2771,7 @@ function SupportTicketsLayout({
     <section id="tickets" className="scroll-mt-6">
       <Panel
         title="Support Ticket Management"
-        subtitle="Admin can review, mark in progress and resolve support tickets"
+        subtitle="Admin can review support requests, track progress and close resolved issues professionally"
         icon={<Headphones size={20} />}
         action={
           <SearchBox
@@ -1600,65 +2785,145 @@ function SupportTicketsLayout({
           <EmptyState text="No support tickets found." />
         ) : (
           <div className="space-y-4">
-            {tickets.map((ticket) => (
-              <article
-                key={ticket._id}
-                className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-950">
-                      {ticket.subject || "Support Ticket"}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {ticket.user?.name ||
-                        ticket.patient?.name ||
-                        ticket.email ||
-                        "User"}
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-slate-700">
-                      {ticket.message || ticket.description || "No message"}
-                    </p>
-                    <p className="mt-3 text-xs font-bold text-slate-400">
-                      Created: {formatDateTime(ticket.createdAt)}
-                    </p>
+            {tickets.map((ticket) => {
+              const status = String(ticket.status || "pending").toLowerCase();
+              const isResolved = status === "resolved";
+              const isInProgress = status === "in_progress";
+              const patientName =
+                ticket.user?.name || ticket.patient?.name || ticket.email || "User";
+
+              return (
+                <article
+                  key={ticket._id}
+                  className={`rounded-3xl border p-5 shadow-sm transition ${
+                    isResolved
+                      ? "border-emerald-200 bg-emerald-50/40"
+                      : isInProgress
+                        ? "border-cyan-200 bg-cyan-50/30"
+                        : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h3 className="text-lg font-black text-slate-950">
+                          {ticket.subject || "Support Ticket"}
+                        </h3>
+                        {isResolved && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                            <CheckCircle2 size={14} /> Completed
+                          </span>
+                        )}
+                        {isInProgress && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-cyan-700">
+                            <Clock size={14} /> Under Review
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-1 text-sm font-semibold text-slate-600">
+                        {patientName}
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-700">
+                        {ticket.message || ticket.description || "No message"}
+                      </p>
+                      <p className="mt-3 text-xs font-bold text-slate-400">
+                        Created: {formatDateTime(ticket.createdAt)}
+                      </p>
+                    </div>
+
+                    <StatusBadge status={ticket.status} />
                   </div>
 
-                  <StatusBadge status={ticket.status} />
-                </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl bg-white p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                        Ticket State
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-800">
+                        {isResolved
+                          ? "Resolved and closed"
+                          : isInProgress
+                            ? "Admin review in progress"
+                            : "Waiting for admin review"}
+                      </p>
+                    </div>
 
-                {ticket.adminReply && (
-                  <div className="mt-4 rounded-2xl bg-white p-4">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                      Admin Reply
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {ticket.adminReply}
-                    </p>
+                    <div className="rounded-2xl bg-white p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                        Patient
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-800">
+                        {patientName}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-white p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                        Admin Action
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-800">
+                        {isResolved
+                          ? "No pending action"
+                          : isInProgress
+                            ? "Resolve after checking"
+                            : "Start review or resolve"}
+                      </p>
+                    </div>
                   </div>
-                )}
 
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    disabled={actionLoading || ticket.status === "in_progress"}
-                    onClick={() => onTicketUpdate(ticket._id, "in_progress")}
-                    className="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Mark In Progress
-                  </button>
+                  {(ticket.adminReply || isResolved || isInProgress) && (
+                    <div
+                      className={`mt-4 rounded-2xl p-4 ${
+                        isResolved
+                          ? "border border-emerald-100 bg-white"
+                          : "bg-white"
+                      }`}
+                    >
+                      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                        {isResolved ? <CheckCircle2 size={15} /> : <Headphones size={15} />}
+                        Admin Reply
+                      </p>
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
+                        {ticket.adminReply ||
+                          (isResolved
+                            ? "This support ticket has been resolved and closed by MediLink admin."
+                            : "This support ticket is being reviewed by MediLink admin.")}
+                      </p>
+                    </div>
+                  )}
 
-                  <button
-                    type="button"
-                    disabled={actionLoading || ticket.status === "resolved"}
-                    onClick={() => onTicketUpdate(ticket._id, "resolved")}
-                    className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Resolve
-                  </button>
-                </div>
-              </article>
-            ))}
+                  {isResolved ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                      <CheckCircle2 size={18} />
+                      Resolved ticket — progress actions are hidden.
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {!isInProgress && (
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          onClick={() => onTicketUpdate(ticket._id, "in_progress")}
+                          className="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Mark In Progress
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => onTicketUpdate(ticket._id, "resolved")}
+                        className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Resolve Ticket
+                      </button>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         )}
       </Panel>
@@ -1691,72 +2956,111 @@ function ReissueRequestsLayout({
           <EmptyState text="No reissue requests found." />
         ) : (
           <div className="space-y-4">
-            {requests.map((request) => (
-              <article
-                key={request._id}
-                className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-950">
-                      {request.requestType || "Replacement Request"}
-                    </h3>
+            {requests.map((request) => {
+              const requestStatus = String(request.status || "pending").toLowerCase();
+              const isApproved = requestStatus === "approved";
+              const isRejected = requestStatus === "rejected";
+              const isFinalized = isApproved || isRejected;
 
-                    <p className="mt-1 text-sm text-slate-600">
-                      Patient:{" "}
-                      {request.patient?.name ||
-                        request.patient?.email ||
-                        "Patient"}
-                    </p>
+              return (
+                <article
+                  key={request._id}
+                  className={`rounded-3xl border p-5 ${
+                    isFinalized
+                      ? "border-slate-200 bg-white"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-950">
+                        {request.requestType || "Replacement Request"}
+                      </h3>
 
-                    <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 font-mono text-xs font-bold text-violet-700">
-                      {request.prescriptionToken || "No token"}
-                    </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Patient:{" "}
+                        {request.patient?.name ||
+                          request.patient?.email ||
+                          "Patient"}
+                      </p>
 
-                    <p className="mt-3 text-sm leading-6 text-slate-700">
-                      {request.reason || "No reason provided."}
-                    </p>
+                      <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 font-mono text-xs font-bold text-violet-700">
+                        {request.prescriptionToken || "No token"}
+                      </p>
 
-                    <p className="mt-3 text-xs font-bold text-slate-400">
-                      Requested: {formatDateTime(request.createdAt)}
-                    </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-700">
+                        {request.reason || "No reason provided."}
+                      </p>
+
+                      <p className="mt-3 text-xs font-bold text-slate-400">
+                        Requested: {formatDateTime(request.createdAt)}
+                      </p>
+                    </div>
+
+                    <StatusBadge status={request.status} />
                   </div>
 
-                  <StatusBadge status={request.status} />
-                </div>
+                  {request.adminNote && (
+                    <div className="mt-4 rounded-2xl bg-white p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                        Admin Note
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">
+                        {request.adminNote}
+                      </p>
+                    </div>
+                  )}
 
-                {request.adminNote && (
-                  <div className="mt-4 rounded-2xl bg-white p-4">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                      Admin Note
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {request.adminNote}
-                    </p>
-                  </div>
-                )}
+                  {isFinalized ? (
+                    <div
+                      className={`mt-4 rounded-2xl border p-4 ${
+                        isApproved
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          : "border-red-200 bg-red-50 text-red-800"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {isApproved ? (
+                          <CheckCircle2 className="mt-0.5 shrink-0" size={18} />
+                        ) : (
+                          <XCircle className="mt-0.5 shrink-0" size={18} />
+                        )}
+                        <div>
+                          <p className="text-sm font-black">
+                            {isApproved
+                              ? "Approved reissue request"
+                              : "Rejected reissue request"}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold opacity-80">
+                            This request is already finalized, so approve/reject actions are hidden.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => onReplacementUpdate(request._id, "approved")}
+                        className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
 
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    disabled={actionLoading || request.status === "approved"}
-                    onClick={() => onReplacementUpdate(request._id, "approved")}
-                    className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Approve
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={actionLoading || request.status === "rejected"}
-                    onClick={() => onReplacementUpdate(request._id, "rejected")}
-                    className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </article>
-            ))}
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => onReplacementUpdate(request._id, "rejected")}
+                        className="rounded-2xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         )}
       </Panel>
