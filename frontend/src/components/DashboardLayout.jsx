@@ -16,17 +16,46 @@ import {
   ShieldCheck,
   Stethoscope,
   UserRound,
+  Users,
   X,
 } from "lucide-react";
 import { formatDateTime } from "./dashboard/ui";
+
+function cx(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
 
 const API_ORIGIN = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
 ).replace(/\/api\/?$/, "");
 
-function cx(...classes) {
-  return classes.filter(Boolean).join(" ");
+const SIDEBAR_SCROLLBAR_STYLE = `
+.medilink-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.9) transparent;
 }
+.medilink-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.medilink-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.medilink-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #22d3ee, #14b8a6);
+  border-radius: 999px;
+}
+.medilink-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #67e8f9, #2dd4bf);
+}
+.medilink-sidebar-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.medilink-sidebar-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+`;
 
 function getMediaUrl(value = "") {
   if (!value) return "";
@@ -36,21 +65,12 @@ function getMediaUrl(value = "") {
   return `${API_ORIGIN}/${value}`;
 }
 
-function removeDoctorPrefix(name = "") {
-  return String(name || "")
-    .trim()
-    .replace(/^(dr\.?\s*)+/i, "")
-    .trim();
-}
-
-function formatDoctorName(name = "Doctor") {
-  const cleanName = removeDoctorPrefix(name);
-
-  if (!cleanName || cleanName.toLowerCase() === "doctor") {
-    return "Doctor";
+function getStoredAdminProfile() {
+  try {
+    return JSON.parse(localStorage.getItem("medilink_admin_profile") || "null");
+  } catch {
+    return null;
   }
-
-  return `Dr. ${cleanName}`;
 }
 
 function getNavItems(role) {
@@ -92,21 +112,16 @@ function getNavItems(role) {
 
   return [
     { label: "Overview", to: "/patient-dashboard", icon: Activity },
-    { label: "Profile", to: "/patient-dashboard#profile", icon: UserRound },
     {
       label: "Appointments",
       to: "/patient-dashboard#appointments",
       icon: BadgeCheck,
     },
-    { label: "Find doctors", to: "/patient-dashboard#doctors", icon: Stethoscope },
-    { label: "Payments", to: "/patient-dashboard#payments", icon: CreditCard },
-    { label: "Support", to: "/patient-dashboard#support", icon: Headphones },
-    { label: "Reissue", to: "/patient-dashboard#reissue", icon: FileCheck2 },
-    {
-      label: "Verify RX",
-      to: "/patient-dashboard#verify-rx",
-      icon: ShieldCheck,
-    },
+    { label: "Find doctors", to: "/doctors", icon: Stethoscope },
+    { label: "Payments", to: "/mock-payment", icon: CreditCard },
+    { label: "Support", to: "/support-ticket", icon: Headphones },
+    { label: "Reissue", to: "/replacement-request", icon: FileCheck2 },
+    { label: "Verify RX", to: "/verify-prescription", icon: ShieldCheck },
   ];
 }
 
@@ -163,14 +178,25 @@ function isMenuItemActive(item, location) {
 function getDashboardProfileTarget(role) {
   if (role === "doctor") return "/doctor-dashboard#profile";
   if (role === "admin") return "/admin-dashboard#profile";
-  return "/patient-dashboard#profile";
+  return "";
+}
+
+function removeDoctorPrefix(name = "") {
+  return String(name || "")
+    .trim()
+    .replace(/^(dr\.?\s*)+/i, "")
+    .trim();
 }
 
 function getProfileDisplayName(role, user) {
   const name = user?.name || "User";
 
   if (role === "doctor") {
-    return formatDoctorName(name);
+    const cleanName = removeDoctorPrefix(name);
+
+    return cleanName && cleanName.toLowerCase() !== "doctor"
+      ? `Dr. ${cleanName}`
+      : "Doctor";
   }
 
   return name;
@@ -187,32 +213,34 @@ function Sidebar({
   location,
 }) {
   const navigate = useNavigate();
-  const [imageFailed, setImageFailed] = useState(false);
-
-  useEffect(() => {
-    setImageFailed(false);
-  }, [user?.imageUrl, user?.profileImage]);
 
   const getFirstLetter = (name) => {
     if (!name) return "U";
-
-    const cleanName = role === "doctor" ? removeDoctorPrefix(name) : name;
-
-    return cleanName.charAt(0).toUpperCase() || "U";
+    return name.charAt(0).toUpperCase();
   };
 
-  const rawProfileImage = user?.imageUrl || user?.profileImage || "";
-  const profileImage = getMediaUrl(rawProfileImage);
+  const storedAdminProfile = role === "admin" ? getStoredAdminProfile() : null;
+  const sidebarUser =
+    role === "admin" && storedAdminProfile
+      ? {
+          ...user,
+          ...storedAdminProfile,
+          email: user?.email || storedAdminProfile.email,
+          role: user?.role || storedAdminProfile.role || role,
+        }
+      : user;
 
+  const profileImage = getMediaUrl(
+    sidebarUser?.imageUrl || sidebarUser?.profileImage || ""
+  );
   const profileLabel =
-    user?.specialization ||
-    user?.department ||
-    user?.designation ||
-    user?.role ||
+    sidebarUser?.specialization ||
+    sidebarUser?.department ||
+    sidebarUser?.designation ||
+    sidebarUser?.role ||
     title;
 
-  const canEditProfile =
-    role === "doctor" || role === "admin" || role === "patient";
+  const canEditProfile = role === "doctor" || role === "admin";
 
   const goToProfile = () => {
     if (!canEditProfile) return;
@@ -240,44 +268,11 @@ function Sidebar({
         theme.glow
       )}
     >
-      <style>
-        {`
-          .medilink-sidebar-scrollbar {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(34, 211, 238, 0.7) rgba(15, 23, 42, 0.35);
-          }
-
-          .medilink-sidebar-scrollbar::-webkit-scrollbar {
-            width: 8px;
-          }
-
-          .medilink-sidebar-scrollbar::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.45);
-            border-radius: 999px;
-            margin: 12px 0;
-          }
-
-          .medilink-sidebar-scrollbar::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, rgba(34, 211, 238, 0.9), rgba(16, 185, 129, 0.9));
-            border-radius: 999px;
-            border: 2px solid rgba(9, 17, 30, 0.95);
-          }
-
-          .medilink-sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(180deg, rgba(103, 232, 249, 1), rgba(52, 211, 153, 1));
-          }
-        `}
-      </style>
-
       <div className="pointer-events-none absolute -top-12 left-1/4 right-1/4 h-16 w-1/2 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 blur-xl" />
 
       <div className="border-b border-white/[0.06] p-5">
         <div className="flex items-center justify-between gap-2">
-          <Link
-            to="/"
-            className="group flex items-center gap-3"
-            onClick={onClose}
-          >
+          <Link to="/" className="group flex items-center gap-3" onClick={onClose}>
             <div
               className={cx(
                 "grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-slate-950 shadow-md transition-transform duration-300 group-hover:scale-105 group-hover:rotate-6",
@@ -324,25 +319,24 @@ function Sidebar({
           )}
         >
           <div className="flex items-center gap-3">
-            {profileImage && !imageFailed ? (
+            {profileImage ? (
               <img
                 src={profileImage}
-                alt={user?.name || "Profile"}
-                onError={() => setImageFailed(true)}
+                alt={sidebarUser?.name || "Profile"}
                 className="h-10 w-10 shrink-0 rounded-xl border border-white/10 object-cover shadow-inner"
               />
             ) : (
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-sm font-bold text-white shadow-inner">
-                {getFirstLetter(user?.name)}
+                {getFirstLetter(sidebarUser?.name)}
               </div>
             )}
 
             <div className="min-w-0 flex-1 overflow-hidden">
               <p className="truncate text-xs font-black text-white">
-                {getProfileDisplayName(role, user)}
+                {getProfileDisplayName(role, sidebarUser)}
               </p>
               <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
-                {user?.email || "No email profile"}
+                {sidebarUser?.email || "No email profile"}
               </p>
             </div>
           </div>
@@ -357,7 +351,7 @@ function Sidebar({
                 theme.accent
               )}
             >
-              {user?.role || role}
+              {sidebarUser?.role || role}
             </span>
           </div>
 
@@ -369,7 +363,7 @@ function Sidebar({
         </button>
       </div>
 
-      <nav className="medilink-sidebar-scrollbar flex-1 space-y-1 overflow-y-auto p-3 pr-2">
+      <nav className="medilink-sidebar-scroll custom-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isMenuItemActive(item, location);
@@ -470,7 +464,9 @@ export default function DashboardLayout({
   );
 
   return (
-    <div className="min-h-screen bg-[#eef2f6] text-slate-900">
+    <>
+      <style>{SIDEBAR_SCROLLBAR_STYLE}</style>
+      <div className="min-h-screen bg-[#eef2f6] text-slate-900">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-40 top-0 h-[500px] w-[500px] rounded-full bg-emerald-300/20 blur-[100px]" />
         <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-cyan-300/20 blur-[100px]" />
@@ -487,7 +483,7 @@ export default function DashboardLayout({
               <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
-                className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm lg:hidden"
+                className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white shadow-sm lg:hidden"
                 aria-label="Open menu"
               >
                 <Menu size={20} />
@@ -536,17 +532,19 @@ export default function DashboardLayout({
                 </button>
               )}
 
-              <Link
-                to="/"
-                className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:border-cyan-200 hover:text-cyan-700 sm:inline-flex"
-              >
-                <Home size={16} />
-                Home
-              </Link>
+              {role !== "admin" && (
+                <Link
+                  to="/"
+                  className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 sm:inline-flex"
+                >
+                  <Home size={16} />
+                  Home
+                </Link>
+              )}
 
               <Link
                 to="/"
-                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-100 hover:text-red-800"
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 shadow-sm transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-800"
               >
                 <ArrowLeft size={16} />
                 Exit
@@ -592,6 +590,7 @@ export default function DashboardLayout({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </>
   );
 }
