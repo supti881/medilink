@@ -16,20 +16,38 @@ const normalizeText = (value) => {
   return value.trim();
 };
 
+const getUploadedFileUrl = (file) => {
+  if (!file) {
+    return "";
+  }
+
+  const normalizedPath = String(file.path || "").replace(/\\/g, "/");
+
+  if (normalizedPath.includes("/uploads/")) {
+    return normalizedPath.slice(normalizedPath.indexOf("/uploads/"));
+  }
+
+  if (normalizedPath.startsWith("uploads/")) {
+    return `/${normalizedPath}`;
+  }
+
+  if (file.filename) {
+    return `/uploads/${file.filename}`;
+  }
+
+  return "";
+};
+
 const buildUserPayload = (user) => {
   return {
-    id: user._id,
     _id: user._id,
+    id: user._id,
     name: user.name,
     email: user.email,
     phone: user.phone || "",
     role: user.role,
     profileImage: user.profileImage || "",
     imageUrl: user.profileImage || "",
-
-    designation: user.designation || "",
-    bio: user.bio || "",
-
     gender: user.gender || "",
     dateOfBirth: user.dateOfBirth || null,
     bloodGroup: user.bloodGroup || "",
@@ -37,183 +55,32 @@ const buildUserPayload = (user) => {
     emergencyContactName: user.emergencyContactName || "",
     emergencyContactPhone: user.emergencyContactPhone || "",
     medicalNotes: user.medicalNotes || "",
-
     isVerified: user.isVerified,
     status: user.status,
-    adminNote: user.adminNote || "",
-    statusUpdatedBy: user.statusUpdatedBy || null,
-    statusUpdatedAt: user.statusUpdatedAt || null,
-    blockedAt: user.blockedAt || null,
-    activatedAt: user.activatedAt || null,
-
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-  };
-};
-
-const getUserStatusFromAction = (actionOrStatus = "") => {
-  const value = String(actionOrStatus || "").trim().toLowerCase();
-
-  const statusMap = {
-    active: "active",
-    activate: "active",
-    activated: "active",
-
-    inactive: "inactive",
-    deactivate: "inactive",
-    deactivated: "inactive",
-
-    blocked: "blocked",
-    block: "blocked",
-  };
-
-  return statusMap[value] || "";
-};
-
-const getDefaultUserAdminNote = (status) => {
-  if (status === "active") {
-    return "Patient account activated by MediLink admin.";
-  }
-
-  if (status === "inactive") {
-    return "Patient account marked inactive by MediLink admin.";
-  }
-
-  if (status === "blocked") {
-    return "Patient account blocked by MediLink admin.";
-  }
-
-  return "Patient account status updated by MediLink admin.";
-};
-
-const buildProfileUpdatePayload = (req) => {
-  const {
-    name,
-    phone,
-    profileImage,
-    imageUrl,
-    designation,
-    bio,
-    gender,
-    dateOfBirth,
-    bloodGroup,
-    address,
-    emergencyContactName,
-    emergencyContactPhone,
-    medicalNotes,
-  } = req.body;
-
-  const updateData = {};
-
-  if (name !== undefined) {
-    const cleanName = normalizeText(name);
-
-    if (cleanName.length < 2) {
-      return {
-        error: "Name must be at least 2 characters",
-      };
-    }
-
-    updateData.name = cleanName;
-  }
-
-  if (phone !== undefined) {
-    updateData.phone = normalizeText(phone);
-  }
-
-  if (profileImage !== undefined) {
-    updateData.profileImage = normalizeText(profileImage);
-  }
-
-  if (imageUrl !== undefined && profileImage === undefined) {
-    updateData.profileImage = normalizeText(imageUrl);
-  }
-
-  if (designation !== undefined) {
-    updateData.designation = normalizeText(designation);
-  }
-
-  if (bio !== undefined) {
-    updateData.bio = normalizeText(bio);
-  }
-
-  if (gender !== undefined) {
-    const cleanGender = normalizeText(gender).toLowerCase();
-    const allowedGender = ["", "male", "female", "other"];
-
-    if (!allowedGender.includes(cleanGender)) {
-      return {
-        error: "Gender must be male, female, other, or empty",
-      };
-    }
-
-    updateData.gender = cleanGender;
-  }
-
-  if (dateOfBirth !== undefined) {
-    if (!dateOfBirth) {
-      updateData.dateOfBirth = null;
-    } else {
-      const parsedDate = new Date(dateOfBirth);
-
-      if (Number.isNaN(parsedDate.getTime())) {
-        return {
-          error: "Please provide a valid date of birth",
-        };
-      }
-
-      updateData.dateOfBirth = parsedDate;
-    }
-  }
-
-  if (bloodGroup !== undefined) {
-    const cleanBloodGroup = normalizeText(bloodGroup);
-    const allowedBloodGroups = [
-      "",
-      "A+",
-      "A-",
-      "B+",
-      "B-",
-      "AB+",
-      "AB-",
-      "O+",
-      "O-",
-    ];
-
-    if (!allowedBloodGroups.includes(cleanBloodGroup)) {
-      return {
-        error: "Please provide a valid blood group",
-      };
-    }
-
-    updateData.bloodGroup = cleanBloodGroup;
-  }
-
-  if (address !== undefined) {
-    updateData.address = normalizeText(address);
-  }
-
-  if (emergencyContactName !== undefined) {
-    updateData.emergencyContactName = normalizeText(emergencyContactName);
-  }
-
-  if (emergencyContactPhone !== undefined) {
-    updateData.emergencyContactPhone = normalizeText(emergencyContactPhone);
-  }
-
-  if (medicalNotes !== undefined) {
-    updateData.medicalNotes = normalizeText(medicalNotes);
-  }
-
-  return {
-    updateData,
   };
 };
 
 // Register new user
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password, phone, role } = req.body;
+    const {
+      name,
+      email,
+      password,
+      phone,
+      role,
+      gender,
+      dateOfBirth,
+      bloodGroup,
+      address,
+      emergencyContactName,
+      emergencyContactPhone,
+      medicalNotes,
+    } = req.body;
+
+    const selectedRole = normalizeText(role || "patient").toLowerCase();
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -222,18 +89,26 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    const cleanName = normalizeText(name);
-    const cleanEmail = normalizeText(email).toLowerCase();
+    if (selectedRole === "patient") {
+      if (!phone || !gender || !dateOfBirth || !bloodGroup || !address) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Phone, gender, date of birth, blood group, and address are required for patient registration",
+        });
+      }
 
-    if (cleanName.length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: "Name must be at least 2 characters",
-      });
+      if (!emergencyContactName || !emergencyContactPhone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Emergency contact name and phone are required for patient registration",
+        });
+      }
     }
 
     const existingUser = await User.findOne({
-      email: cleanEmail,
+      email: normalizeText(email).toLowerCase(),
     });
 
     if (existingUser) {
@@ -243,15 +118,37 @@ export const registerUser = async (req, res) => {
       });
     }
 
+    let parsedDateOfBirth = null;
+
+    if (dateOfBirth) {
+      parsedDateOfBirth = new Date(dateOfBirth);
+
+      if (Number.isNaN(parsedDateOfBirth.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid date of birth",
+        });
+      }
+    }
+
     const otp = generateOtp();
     const otpExpiresAt = getOtpExpiry();
+    const uploadedProfileImage = getUploadedFileUrl(req.file);
 
     const user = await User.create({
-      name: cleanName,
-      email: cleanEmail,
+      name: normalizeText(name),
+      email: normalizeText(email).toLowerCase(),
       password,
       phone: normalizeText(phone),
-      role: role || "patient",
+      role: selectedRole || "patient",
+      profileImage: uploadedProfileImage,
+      gender: normalizeText(gender).toLowerCase(),
+      dateOfBirth: parsedDateOfBirth,
+      bloodGroup: normalizeText(bloodGroup),
+      address: normalizeText(address),
+      emergencyContactName: normalizeText(emergencyContactName),
+      emergencyContactPhone: normalizeText(emergencyContactPhone),
+      medicalNotes: normalizeText(medicalNotes),
       otp,
       otpExpiresAt,
       isVerified: false,
@@ -312,13 +209,10 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    if (user.status !== "active") {
+    if (user.status && user.status !== "active") {
       return res.status(403).json({
         success: false,
-        message:
-          user.status === "blocked"
-            ? "This account is blocked. Please contact MediLink admin."
-            : "This account is not active. Please contact MediLink admin.",
+        message: "This account is not active",
       });
     }
 
@@ -401,9 +295,7 @@ export const verifyOtp = async (req, res) => {
     user.otp = undefined;
     user.otpExpiresAt = undefined;
 
-    await user.save({
-      validateBeforeSave: false,
-    });
+    await user.save({ validateBeforeSave: false });
 
     return res.status(200).json({
       success: true,
@@ -422,12 +314,10 @@ export const verifyOtp = async (req, res) => {
 // Get current logged-in user
 export const getCurrentUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-
     return res.status(200).json({
       success: true,
       message: "Current user fetched successfully",
-      user: buildUserPayload(user),
+      user: buildUserPayload(req.user),
     });
   } catch (error) {
     return res.status(500).json({
@@ -450,20 +340,81 @@ export const updateCurrentUserProfile = async (req, res) => {
       });
     }
 
-    const { updateData, error } = buildProfileUpdatePayload(req);
+    const {
+      name,
+      phone,
+      profileImage,
+      gender,
+      dateOfBirth,
+      bloodGroup,
+      address,
+      emergencyContactName,
+      emergencyContactPhone,
+      medicalNotes,
+    } = req.body;
 
-    if (error) {
-      return res.status(400).json({
-        success: false,
-        message: error,
-      });
+    const updateData = {};
+
+    if (name !== undefined) {
+      const cleanName = normalizeText(name);
+
+      if (cleanName.length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Name must be at least 2 characters",
+        });
+      }
+
+      updateData.name = cleanName;
     }
 
-    if (!Object.keys(updateData).length) {
-      return res.status(400).json({
-        success: false,
-        message: "No profile data provided for update",
-      });
+    if (phone !== undefined) {
+      updateData.phone = normalizeText(phone);
+    }
+
+    if (profileImage !== undefined) {
+      updateData.profileImage = normalizeText(profileImage);
+    }
+
+    if (gender !== undefined) {
+      updateData.gender = normalizeText(gender).toLowerCase();
+    }
+
+    if (dateOfBirth !== undefined) {
+      if (!dateOfBirth) {
+        updateData.dateOfBirth = null;
+      } else {
+        const parsedDate = new Date(dateOfBirth);
+
+        if (Number.isNaN(parsedDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Please provide a valid date of birth",
+          });
+        }
+
+        updateData.dateOfBirth = parsedDate;
+      }
+    }
+
+    if (bloodGroup !== undefined) {
+      updateData.bloodGroup = normalizeText(bloodGroup);
+    }
+
+    if (address !== undefined) {
+      updateData.address = normalizeText(address);
+    }
+
+    if (emergencyContactName !== undefined) {
+      updateData.emergencyContactName = normalizeText(emergencyContactName);
+    }
+
+    if (emergencyContactPhone !== undefined) {
+      updateData.emergencyContactPhone = normalizeText(emergencyContactPhone);
+    }
+
+    if (medicalNotes !== undefined) {
+      updateData.medicalNotes = normalizeText(medicalNotes);
     }
 
     const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
@@ -492,30 +443,10 @@ export const updateCurrentUserProfile = async (req, res) => {
   }
 };
 
-// Admin: Get all patients
+// Admin: get all patient accounts
 export const getAdminPatients = async (req, res) => {
   try {
-    const { status, search } = req.query;
-
-    const filter = {
-      role: "patient",
-    };
-
-    if (status && ["active", "inactive", "blocked"].includes(status)) {
-      filter.status = status;
-    }
-
-    if (search) {
-      const cleanSearch = normalizeText(search);
-
-      filter.$or = [
-        { name: { $regex: cleanSearch, $options: "i" } },
-        { email: { $regex: cleanSearch, $options: "i" } },
-        { phone: { $regex: cleanSearch, $options: "i" } },
-      ];
-    }
-
-    const patients = await User.find(filter).sort({
+    const patients = await User.find({ role: "patient" }).sort({
       createdAt: -1,
     });
 
@@ -527,87 +458,44 @@ export const getAdminPatients = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch patients",
+      message: "Failed to fetch patient accounts",
       error: error.message,
     });
   }
 };
 
-// Admin: Get one patient
-export const getAdminPatientById = async (req, res) => {
-  try {
-    const patient = await User.findOne({
-      _id: req.params.id,
-      role: "patient",
-    });
-
-    if (!patient) {
-      return res.status(404).json({
-        success: false,
-        message: "Patient not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      patient: buildUserPayload(patient),
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch patient profile",
-      error: error.message,
-    });
-  }
-};
-
-// Admin: Block / activate patient
+// Admin: update patient account status
 export const updatePatientStatusByAdmin = async (req, res) => {
   try {
-    const requestedStatus = getUserStatusFromAction(
-      req.body.status || req.body.action
-    );
+    const { patientId } = req.params;
+    const { status } = req.body;
 
-    if (!requestedStatus) {
+    const allowedStatuses = ["active", "inactive", "blocked"];
+
+    if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid patient action. Use active, inactive, or blocked.",
+        message: "Invalid patient status",
       });
     }
 
-    const patient = await User.findOne({
-      _id: req.params.id,
-      role: "patient",
-    });
+    const patient = await User.findOneAndUpdate(
+      { _id: patientId, role: "patient" },
+      { status },
+      { new: true, runValidators: true }
+    );
 
     if (!patient) {
       return res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "Patient account not found",
       });
     }
 
-    const adminNote = normalizeText(req.body.adminNote);
-
-    patient.status = requestedStatus;
-    patient.adminNote = adminNote || getDefaultUserAdminNote(requestedStatus);
-    patient.statusUpdatedBy = req.user._id;
-    patient.statusUpdatedAt = new Date();
-
-    if (requestedStatus === "blocked") {
-      patient.blockedAt = new Date();
-    }
-
-    if (requestedStatus === "active") {
-      patient.activatedAt = new Date();
-      patient.blockedAt = null;
-    }
-
-    await patient.save();
-
     return res.status(200).json({
       success: true,
-      message: `Patient account marked as ${requestedStatus}`,
+      message: `Patient account marked as ${status}`,
+      user: buildUserPayload(patient),
       patient: buildUserPayload(patient),
     });
   } catch (error) {
