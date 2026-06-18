@@ -283,22 +283,44 @@ function isPatientCandidate(candidate, currentAdmin) {
   return true;
 }
 
-function collectPatientsFromRecords(tickets = [], replacementRequests = [], currentAdmin = null) {
+function collectPatientsForAdmin(patientAccounts = [], tickets = [], replacementRequests = [], currentAdmin = null) {
   const patientMap = new Map();
+
+  const getPatientKey = (candidate = {}) => {
+    return String(candidate._id || candidate.id || candidate.email || candidate.name || candidate.fullName || "")
+      .trim()
+      .toLowerCase();
+  };
+
+  const findExistingKey = (candidate = {}) => {
+    const keys = getComparableKeys(candidate);
+
+    for (const [storedKey, storedPatient] of patientMap.entries()) {
+      const storedKeys = getComparableKeys(storedPatient);
+      if (keys.some((key) => storedKeys.includes(key))) {
+        return storedKey;
+      }
+    }
+
+    return "";
+  };
 
   const addPatient = (candidate, source) => {
     if (!isPatientCandidate(candidate, currentAdmin)) return;
 
     const email = candidate.email || "";
     const name = candidate.name || candidate.fullName || "";
-    const id = candidate._id || candidate.id || email || name;
+    const directKey = getPatientKey(candidate);
+    const existingKey = findExistingKey(candidate);
+    const mapKey = existingKey || directKey;
 
-    if (!id) return;
+    if (!mapKey) return;
 
-    if (!patientMap.has(id)) {
-      patientMap.set(id, {
+    if (!patientMap.has(mapKey)) {
+      patientMap.set(mapKey, {
         ...candidate,
-        _id: id,
+        _id: candidate._id || candidate.id || directKey,
+        id: candidate.id || candidate._id || directKey,
         name: name || "Patient",
         email: email || "No email",
         phone: candidate.phone || "N/A",
@@ -307,18 +329,37 @@ function collectPatientsFromRecords(tickets = [], replacementRequests = [], curr
         totalTickets: 0,
         totalReissues: 0,
       });
+    } else {
+      const previous = patientMap.get(mapKey);
+      patientMap.set(mapKey, {
+        ...previous,
+        ...candidate,
+        _id: previous._id || candidate._id || candidate.id || directKey,
+        id: previous.id || candidate.id || candidate._id || directKey,
+        name: previous.name && previous.name !== "Patient" ? previous.name : name || previous.name || "Patient",
+        email: previous.email && previous.email !== "No email" ? previous.email : email || previous.email || "No email",
+        phone: previous.phone && previous.phone !== "N/A" ? previous.phone : candidate.phone || previous.phone || "N/A",
+        role: "patient",
+        source: previous.source === "account" ? "account" : source,
+        totalTickets: previous.totalTickets || 0,
+        totalReissues: previous.totalReissues || 0,
+      });
     }
 
-    const patient = patientMap.get(id);
+    const patient = patientMap.get(mapKey);
 
     if (source === "ticket") {
-      patient.totalTickets += 1;
+      patient.totalTickets = (patient.totalTickets || 0) + 1;
     }
 
     if (source === "reissue") {
-      patient.totalReissues += 1;
+      patient.totalReissues = (patient.totalReissues || 0) + 1;
     }
   };
+
+  patientAccounts.forEach((patient) => {
+    addPatient(patient, "account");
+  });
 
   tickets.forEach((ticket) => {
     addPatient(ticket.patient || ticket.user, "ticket");
@@ -472,6 +513,7 @@ function AdminDashboard() {
   });
 
   const [doctors, setDoctors] = useState([]);
+  const [patientAccounts, setPatientAccounts] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [replacementRequests, setReplacementRequests] = useState([]);
 
@@ -518,9 +560,12 @@ function AdminDashboard() {
           return;
         }
 
-        const [doctorsResponse, ticketsResponse, reissueResponse] =
+        const [doctorsResponse, patientsResponse, ticketsResponse, reissueResponse] =
           await Promise.all([
             (doctorApi.getAdminDoctors || doctorApi.getAll)(),
+            authApi.getAdminPatients
+              ? authApi.getAdminPatients()
+              : Promise.resolve({ patients: [] }),
             supportTicketApi.getAllTickets(),
             replacementRequestApi.getAllRequests(),
           ]);
@@ -536,6 +581,7 @@ function AdminDashboard() {
         }
 
         setDoctors(doctorsResponse.doctors || []);
+        setPatientAccounts(patientsResponse.patients || []);
         setTickets(ticketsResponse.tickets || []);
         setReplacementRequests(reissueResponse.requests || []);
         setLastSynced(new Date().toISOString());
@@ -557,11 +603,11 @@ function AdminDashboard() {
   }, [fetchAdminData]);
 
   const patients = useMemo(() => {
-    return collectPatientsFromRecords(tickets, replacementRequests, user).map((patient) => ({
+    return collectPatientsForAdmin(patientAccounts, tickets, replacementRequests, user).map((patient) => ({
       ...patient,
-      ...(patientStatusOverrides[patient._id] || {}),
+      ...(patientStatusOverrides[patient._id] || patientStatusOverrides[patient.id] || {}),
     }));
-  }, [tickets, replacementRequests, user, patientStatusOverrides]);
+  }, [patientAccounts, tickets, replacementRequests, user, patientStatusOverrides]);
 
   const filteredDoctors = useMemo(() => {
     const query = doctorSearch.trim().toLowerCase();

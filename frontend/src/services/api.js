@@ -13,25 +13,13 @@ const removeToken = () => {
   localStorage.removeItem("medilink_token");
 };
 
-const buildQueryString = (params = {}) => {
-  const searchParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      searchParams.append(key, value);
-    }
-  });
-
-  const queryString = searchParams.toString();
-
-  return queryString ? `?${queryString}` : "";
-};
-
 const request = async (endpoint, options = {}) => {
   const token = getToken();
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
 
   const headers = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers || {}),
   };
 
@@ -99,9 +87,12 @@ const uploadRequest = async (endpoint, formData) => {
 
 export const authApi = {
   register: async (payload) => {
+    const isFormData =
+      typeof FormData !== "undefined" && payload instanceof FormData;
+
     return request("/auth/register", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: isFormData ? payload : JSON.stringify(payload),
     });
   },
 
@@ -136,12 +127,8 @@ export const authApi = {
     });
   },
 
-  getAdminPatients: async (params = {}) => {
-    return request(`/auth/admin/patients${buildQueryString(params)}`);
-  },
-
-  getAdminPatientById: async (patientId) => {
-    return request(`/auth/admin/patients/${patientId}`);
+  getAdminPatients: async () => {
+    return request("/auth/admin/patients");
   },
 
   updatePatientStatus: async (patientId, payload) => {
@@ -163,8 +150,8 @@ export const authApi = {
 };
 
 export const doctorApi = {
-  getAll: async (params = {}) => {
-    return request(`/doctors${buildQueryString(params)}`);
+  getAll: async () => {
+    return request("/doctors");
   },
 
   getMyProfile: async () => {
@@ -181,28 +168,6 @@ export const doctorApi = {
   getById: async (doctorId) => {
     return request(`/doctors/${doctorId}`);
   },
-
-  getAdminDoctors: async (params = {}) => {
-    return request(`/doctors/admin/list${buildQueryString(params)}`);
-  },
-
-  getAdminDoctorById: async (doctorId) => {
-    return request(`/doctors/admin/${doctorId}`);
-  },
-
-  updateDoctorByAdmin: async (doctorId, payload) => {
-    return request(`/doctors/admin/${doctorId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  updateDoctorStatus: async (doctorId, payload) => {
-    return request(`/doctors/admin/${doctorId}/status`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  },
 };
 
 export const appointmentApi = {
@@ -217,12 +182,8 @@ export const appointmentApi = {
     return request("/appointments/my");
   },
 
-  getDoctorAppointments: async (params = {}) => {
-    return request(`/appointments/doctor${buildQueryString(params)}`);
-  },
-
-  getAdminAppointments: async (params = {}) => {
-    return request(`/appointments/admin/list${buildQueryString(params)}`);
+  getDoctorAppointments: async () => {
+    return request("/appointments/doctor");
   },
 
   updateStatus: async (appointmentId, payload) => {
@@ -258,8 +219,8 @@ export const paymentApi = {
     });
   },
 
-  getMyPayments: async (params = {}) => {
-    return request(`/payments/my${buildQueryString(params)}`);
+  getMyPayments: async () => {
+    return request("/payments/my");
   },
 
   getById: async (paymentId) => {
@@ -281,23 +242,8 @@ export const paymentApi = {
     return request("/payments/doctor/payout-requests");
   },
 
-  getAdminPaymentSummary: async () => {
-    return request("/payments/admin/summary");
-  },
-
-  getAdminPayments: async (params = {}) => {
-    return request(`/payments/admin/list${buildQueryString(params)}`);
-  },
-
-  updatePaymentStatus: async (paymentId, payload) => {
-    return request(`/payments/admin/${paymentId}/status`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  getAllPayoutRequests: async (params = {}) => {
-    return request(`/payments/admin/payout-requests${buildQueryString(params)}`);
+  getAllPayoutRequests: async () => {
+    return request("/payments/admin/payout-requests");
   },
 
   updatePayoutRequestStatus: async (payoutRequestId, payload) => {
@@ -320,8 +266,8 @@ export const supportTicketApi = {
     return request("/support-tickets/my");
   },
 
-  getAllTickets: async (params = {}) => {
-    return request(`/support-tickets${buildQueryString(params)}`);
+  getAllTickets: async () => {
+    return request("/support-tickets");
   },
 
   update: async (ticketId, payload) => {
@@ -344,8 +290,8 @@ export const replacementRequestApi = {
     return request("/replacement-requests/my");
   },
 
-  getAllRequests: async (params = {}) => {
-    return request(`/replacement-requests${buildQueryString(params)}`);
+  getAllRequests: async () => {
+    return request("/replacement-requests");
   },
 
   update: async (requestId, payload) => {
