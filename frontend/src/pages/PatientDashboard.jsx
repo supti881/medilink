@@ -5,6 +5,7 @@ import {
   Camera,
   CheckCircle2,
   CreditCard,
+  Download,
   ExternalLink,
   FileText,
   Headphones,
@@ -119,6 +120,209 @@ function formatDoctorDisplayName(name = "") {
   }
 
   return `Dr. ${cleanName}`;
+}
+
+function escapePrescriptionHtml(value = "") {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getPrescriptionDoctorName(prescription) {
+  return formatDoctorDisplayName(
+    prescription?.doctor?.fullName ||
+      prescription?.doctor?.user?.name ||
+      prescription?.doctorName ||
+      "Doctor"
+  );
+}
+
+function getPrescriptionPatientName(prescription) {
+  return (
+    prescription?.patient?.name ||
+    prescription?.patientName ||
+    prescription?.patient?.email ||
+    "Patient"
+  );
+}
+
+function getPrescriptionMedicines(prescription) {
+  const source =
+    prescription?.medicines ||
+    prescription?.medications ||
+    prescription?.medicineList ||
+    [];
+
+  if (Array.isArray(source)) {
+    return source.filter(Boolean);
+  }
+
+  if (typeof source === "string") {
+    return source
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function getMedicineText(medicine) {
+  if (typeof medicine === "string") {
+    return medicine;
+  }
+
+  const name =
+    medicine?.name ||
+    medicine?.medicineName ||
+    medicine?.drug ||
+    medicine?.title ||
+    medicine?.medication ||
+    "Medicine";
+
+  const details = [
+    medicine?.dosage || medicine?.dose,
+    medicine?.frequency,
+    medicine?.duration,
+    medicine?.instruction || medicine?.instructions,
+  ].filter(Boolean);
+
+  return details.length ? `${name} — ${details.join(" · ")}` : name;
+}
+
+function getPrescriptionFileName(prescription) {
+  const token = prescription?.verificationToken || prescription?._id || "rx";
+  const cleanToken = String(token).replace(/[^a-zA-Z0-9_-]/g, "-");
+
+  return `MediLink-Prescription-${cleanToken}`;
+}
+
+function buildPrescriptionDocumentHtml(prescription) {
+  const medicines = getPrescriptionMedicines(prescription);
+  const doctorName = getPrescriptionDoctorName(prescription);
+  const patientName = getPrescriptionPatientName(prescription);
+  const createdDate = formatDate(prescription?.createdAt || prescription?.date);
+  const diagnosis = prescription?.diagnosis || "Not specified";
+  const notes =
+    prescription?.notes ||
+    prescription?.advice ||
+    prescription?.instructions ||
+    prescription?.medicalAdvice ||
+    "No additional instructions added.";
+  const token = prescription?.verificationToken || "Not available";
+
+  const medicineRows = medicines.length
+    ? medicines
+        .map(
+          (medicine, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapePrescriptionHtml(getMedicineText(medicine))}</td>
+            </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="2">No medication details added.</td></tr>`;
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapePrescriptionHtml(getPrescriptionFileName(prescription))}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; background: #f8fafc; color: #0f172a; font-family: Arial, sans-serif; }
+    .page { max-width: 820px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 24px; overflow: hidden; box-shadow: 0 24px 70px rgba(15,23,42,0.12); }
+    .header { padding: 28px 32px; background: linear-gradient(135deg, #022c22, #0f766e); color: #ffffff; }
+    .brand { font-size: 22px; font-weight: 900; letter-spacing: -0.03em; }
+    .sub { margin-top: 6px; color: #ccfbf1; font-size: 13px; font-weight: 700; }
+    .content { padding: 30px 32px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+    .box { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 16px; padding: 14px 16px; }
+    .label { display:block; color:#64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; font-weight: 900; margin-bottom: 6px; }
+    .value { font-size: 14px; font-weight: 800; color:#0f172a; }
+    h2 { margin: 24px 0 10px; font-size: 16px; color: #0f172a; }
+    p { line-height: 1.65; margin: 0; color: #334155; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; overflow: hidden; border-radius: 16px; }
+    th, td { border: 1px solid #e2e8f0; padding: 12px 14px; text-align: left; font-size: 13px; vertical-align: top; }
+    th { background: #ecfeff; color: #0f766e; font-weight: 900; }
+    td:first-child { width: 56px; font-weight: 900; color:#0f766e; }
+    .token { margin-top: 22px; padding: 14px 16px; border-radius: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; font-family: monospace; font-weight: 900; color: #047857; }
+    .footer { padding: 18px 32px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; line-height: 1.6; }
+    @media print { body { background: #fff; padding: 0; } .page { box-shadow: none; border-radius: 0; max-width: none; border: 0; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="header">
+      <div class="brand">MediLink Digital Prescription</div>
+      <div class="sub">Generated from verified MediLink prescription record</div>
+    </section>
+    <section class="content">
+      <div class="grid">
+        <div class="box"><span class="label">Patient</span><div class="value">${escapePrescriptionHtml(patientName)}</div></div>
+        <div class="box"><span class="label">Doctor</span><div class="value">${escapePrescriptionHtml(doctorName)}</div></div>
+        <div class="box"><span class="label">Date</span><div class="value">${escapePrescriptionHtml(createdDate)}</div></div>
+        <div class="box"><span class="label">Status</span><div class="value">${escapePrescriptionHtml(prescription?.status || "issued")}</div></div>
+      </div>
+
+      <h2>Diagnosis</h2>
+      <p>${escapePrescriptionHtml(diagnosis)}</p>
+
+      <h2>Medicines</h2>
+      <table>
+        <thead><tr><th>#</th><th>Medicine / Dosage / Instruction</th></tr></thead>
+        <tbody>${medicineRows}</tbody>
+      </table>
+
+      <h2>Doctor Advice</h2>
+      <p>${escapePrescriptionHtml(notes)}</p>
+
+      <div class="token">Verification Token: ${escapePrescriptionHtml(token)}</div>
+    </section>
+    <section class="footer">
+      This digital prescription is generated by MediLink. Verify authenticity using the prescription token in the MediLink prescription verifier.
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
+function downloadPrescriptionHtml(prescription) {
+  const html = buildPrescriptionDocumentHtml(prescription);
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = url;
+  anchor.download = `${getPrescriptionFileName(prescription)}.html`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+function printPrescription(prescription) {
+  const html = buildPrescriptionDocumentHtml(prescription);
+  const printWindow = window.open("", "_blank", "width=900,height=1000");
+
+  if (!printWindow) {
+    downloadPrescriptionHtml(prescription);
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+
+  window.setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 350);
 }
 
 
@@ -827,14 +1031,27 @@ function OverviewLayout({
             <div className="space-y-3">
               {latestPrescriptions.map((rx) => (
                 <RecordCard key={rx._id}>
-                  <div className="flex justify-between gap-3">
-                    <p className="font-black text-slate-950">{rx.diagnosis}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-black text-slate-950">
+                        {rx.diagnosis || "Prescription"}
+                      </p>
+                      <p className="mt-1 font-mono text-xs font-bold text-emerald-700">
+                        {rx.verificationToken || "No token"}
+                      </p>
+                    </div>
+
                     <StatusBadge status={rx.status} />
                   </div>
 
-                  <p className="mt-2 font-mono text-xs font-bold text-emerald-700">
-                    {rx.verificationToken}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => printPrescription(rx)}
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                  >
+                    <Download size={15} />
+                    Download
+                  </button>
                 </RecordCard>
               ))}
             </div>
@@ -1558,15 +1775,37 @@ function VerifyPrescriptionLayout({ prescriptions }) {
           ) : (
             prescriptions.map((rx) => (
               <RecordCard key={rx._id}>
-                <div className="flex justify-between gap-3">
-                  <div>
-                    <p className="font-black text-slate-950">{rx.diagnosis}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-black text-slate-950">
+                      {rx.diagnosis || "Prescription"}
+                    </p>
                     <p className="mt-1 font-mono text-xs font-bold text-emerald-700">
-                      {rx.verificationToken}
+                      {rx.verificationToken || "No token"}
                     </p>
                   </div>
 
                   <StatusBadge status={rx.status} />
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => printPrescription(rx)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700"
+                  >
+                    <Download size={15} />
+                    Download
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => downloadPrescriptionHtml(rx)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <FileText size={15} />
+                    Download HTML
+                  </button>
                 </div>
               </RecordCard>
             ))
