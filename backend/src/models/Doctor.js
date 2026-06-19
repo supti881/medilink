@@ -29,11 +29,19 @@ const availableSlotSchema = new mongoose.Schema(
     capacity: {
       type: Number,
       default: 5,
+      min: 1,
+    },
+
+    consultationMinutes: {
+      type: Number,
+      default: 10,
+      min: 5,
     },
 
     bookedCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
 
     isActive: {

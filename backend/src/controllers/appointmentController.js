@@ -6,6 +6,9 @@ import PaymentTransaction from "../models/PaymentTransaction.js";
 const PLATFORM_COMMISSION_PERCENTAGE =
   Number(process.env.PLATFORM_COMMISSION_PERCENTAGE) || 10;
 
+const JOIN_OPEN_MINUTES_BEFORE = 5;
+const JOIN_CLOSE_MINUTES_AFTER = 10;
+
 function calculateDoctorEarning(amount = 0) {
   const safeAmount = Math.max(Number(amount) || 0, 0);
   const platformFee = Math.round(
@@ -30,6 +33,117 @@ function normalizeText(value = "") {
 
 function normalizePhone(value = "") {
   return String(value || "").replace(/[^\d]/g, "");
+}
+
+function parseTimeToMinutes(timeValue = "") {
+  const cleanValue = String(timeValue || "").trim();
+
+  if (!cleanValue) {
+    return null;
+  }
+
+  const twelveHourMatch = cleanValue.match(
+    /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i
+  );
+
+  if (twelveHourMatch) {
+    let hours = Number(twelveHourMatch[1]);
+    const minutes = Number(twelveHourMatch[2]);
+    const period = twelveHourMatch[3].toUpperCase();
+
+    if (hours === 12) {
+      hours = 0;
+    }
+
+    if (period === "PM") {
+      hours += 12;
+    }
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return null;
+    }
+
+    return hours * 60 + minutes;
+  }
+
+  const twentyFourHourMatch = cleanValue.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (twentyFourHourMatch) {
+    const hours = Number(twentyFourHourMatch[1]);
+    const minutes = Number(twentyFourHourMatch[2]);
+
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return null;
+    }
+
+    return hours * 60 + minutes;
+  }
+
+  return null;
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+function buildDateAtMinutes(baseDate, minutesFromMidnight) {
+  const date = new Date(baseDate);
+  date.setHours(0, 0, 0, 0);
+
+  return addMinutes(date, minutesFromMidnight);
+}
+
+function buildQueueTiming({
+  appointmentDate,
+  slotStartTime,
+  slotEndTime,
+  queuePosition,
+  consultationMinutes,
+}) {
+  const slotStartMinutes = parseTimeToMinutes(slotStartTime);
+  const slotEndMinutes = parseTimeToMinutes(slotEndTime);
+
+  if (slotStartMinutes === null || slotEndMinutes === null) {
+    return {
+      expectedStartTime: null,
+      expectedEndTime: null,
+      joinAvailableAt: null,
+      joinExpiresAt: null,
+    };
+  }
+
+  const safeQueuePosition = Math.max(Number(queuePosition) || 1, 1);
+  const safeConsultationMinutes = Math.max(
+    Number(consultationMinutes) || 10,
+    5
+  );
+
+  const expectedStartMinutes =
+    slotStartMinutes + (safeQueuePosition - 1) * safeConsultationMinutes;
+
+  const expectedEndMinutes = expectedStartMinutes + safeConsultationMinutes;
+
+  const maxEndMinutes =
+    slotEndMinutes > slotStartMinutes ? slotEndMinutes : slotStartMinutes;
+
+  const finalExpectedEndMinutes = Math.min(expectedEndMinutes, maxEndMinutes);
+
+  const expectedStartTime = buildDateAtMinutes(
+    appointmentDate,
+    expectedStartMinutes
+  );
+
+  const expectedEndTime = buildDateAtMinutes(
+    appointmentDate,
+    finalExpectedEndMinutes
+  );
+
+  return {
+    expectedStartTime,
+    expectedEndTime,
+    joinAvailableAt: addMinutes(expectedStartTime, -JOIN_OPEN_MINUTES_BEFORE),
+    joinExpiresAt: addMinutes(expectedEndTime, JOIN_CLOSE_MINUTES_AFTER),
+  };
 }
 
 function isDoctorApprovedForBooking(doctorProfile) {
@@ -232,7 +346,7 @@ export const bookAppointment = async (req, res) => {
         slot.day === appointmentDay &&
         slot.startTime === startTime &&
         slot.endTime === endTime &&
-        slot.isActive
+        slot.isActive !== false
     );
 
     if (!matchedSlot) {
@@ -277,6 +391,12 @@ export const bookAppointment = async (req, res) => {
       });
     }
 
+    const slotCapacity = Math.max(Number(matchedSlot.capacity) || 1, 1);
+    const consultationMinutes = Math.max(
+      Number(matchedSlot.consultationMinutes) || 10,
+      5
+    );
+
     const bookedCount = await Appointment.countDocuments({
       doctor,
       appointmentDate: {
@@ -290,12 +410,27 @@ export const bookAppointment = async (req, res) => {
       },
     });
 
-    if (bookedCount >= matchedSlot.capacity) {
+    if (bookedCount >= slotCapacity) {
       return res.status(409).json({
         success: false,
         message: "This appointment slot is fully booked",
       });
     }
+
+    const queuePosition = bookedCount + 1;
+
+    const {
+      expectedStartTime,
+      expectedEndTime,
+      joinAvailableAt,
+      joinExpiresAt,
+    } = buildQueueTiming({
+      appointmentDate: selectedDate,
+      slotStartTime: startTime,
+      slotEndTime: endTime,
+      queuePosition,
+      consultationMinutes,
+    });
 
     const appointment = await Appointment.create({
       patient: req.user._id,
@@ -304,6 +439,15 @@ export const bookAppointment = async (req, res) => {
       appointmentDay,
       startTime,
       endTime,
+      slotStartTime: startTime,
+      slotEndTime: endTime,
+      queuePosition,
+      slotCapacity,
+      consultationMinutes,
+      expectedStartTime,
+      expectedEndTime,
+      joinAvailableAt,
+      joinExpiresAt,
       symptoms,
       medicalNotes,
       consultationType: consultationType || "video",
@@ -325,7 +469,7 @@ export const bookAppointment = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Appointment booked successfully",
+      message: `Appointment booked successfully. Your queue number is ${queuePosition}.`,
       appointment: populatedAppointment,
     });
   } catch (error) {
@@ -399,7 +543,12 @@ export const getDoctorAppointments = async (req, res) => {
           select: "name email phone role status profileImage",
         },
       })
-      .sort({ appointmentDate: 1, createdAt: -1 });
+      .sort({
+        appointmentDate: 1,
+        startTime: 1,
+        queuePosition: 1,
+        createdAt: -1,
+      });
 
     return res.status(200).json({
       success: true,
