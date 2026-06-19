@@ -1,80 +1,146 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { FiPhoneCall, FiMapPin, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  FiPhoneCall,
+  FiMapPin,
+  FiAlertTriangle,
+  FiLoader,
+} from "react-icons/fi";
+
+const EMERGENCY_HELPLINE = "999";
+
+const openMapsFallback = () => {
+  window.open(
+    "https://www.google.com/maps/search/emergency+hospital+near+me",
+    "_blank",
+    "noopener,noreferrer"
+  );
+};
 
 export default function EmergencyHelp() {
-  return (
-    <section className="relative py-20 bg-[#020d0c] text-slate-200 overflow-hidden border-t border-rose-950/30">
-      
-      {/* Background High-Impact Coral/Rose Ambient Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-rose-600/5 rounded-full blur-[160px] pointer-events-none" />
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState("");
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <motion.div 
+  const handleLocateNearbyER = () => {
+    setLocationMessage("");
+
+    if (!navigator.geolocation) {
+      setLocationMessage(
+        "Location is not supported on this browser. Opening Google Maps search."
+      );
+      openMapsFallback();
+      return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+
+        const mapsUrl = `https://www.google.com/maps/search/emergency+hospital/@${latitude},${longitude},14z`;
+
+        window.open(mapsUrl, "_blank", "noopener,noreferrer");
+
+        setLocationMessage("Nearby emergency hospitals opened in Google Maps.");
+        setIsLocating(false);
+      },
+      () => {
+        setLocationMessage(
+          "Location permission was not allowed. Opening Google Maps search instead."
+        );
+        openMapsFallback();
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 9000,
+        maximumAge: 60000,
+      }
+    );
+  };
+
+  return (
+    <section className="relative overflow-hidden border-t border-rose-950/30 bg-[#020d0c] py-20 text-slate-200">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[350px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-rose-600/5 blur-[160px]" />
+
+      <div className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ type: "spring", stiffness: 50, damping: 15 }}
-          className="relative bg-gradient-to-br from-[#1a090d] via-[#0d0406] to-[#020d0c] rounded-3xl border border-rose-950/60 p-8 sm:p-12 shadow-2xl overflow-hidden group"
+          className="group relative overflow-hidden rounded-3xl border border-rose-950/60 bg-gradient-to-br from-[#1a090d] via-[#0d0406] to-[#020d0c] p-8 shadow-2xl sm:p-12"
         >
-          {/* Subtle Right-side Grid Glow Highlight Accent */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-rose-500/10 to-transparent pointer-events-none" />
+          <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 bg-gradient-to-bl from-rose-500/10 to-transparent" />
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            
-            {/* Left Content Column (7 Columns) */}
-            <div className="lg:col-span-7 space-y-4 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-full text-xs font-semibold tracking-wider uppercase">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12">
+            <div className="space-y-4 text-center lg:col-span-7 lg:text-left">
+              <div className="inline-flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-rose-400">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
                 Critical Dispatch Active
               </div>
-              
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight">
+
+              <h2 className="text-2xl font-bold leading-tight tracking-tight text-white sm:text-3xl">
                 Need Urgent Medical Care? <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-rose-400 via-rose-500 to-orange-400">
+                <span className="bg-gradient-to-r from-rose-400 via-rose-500 to-orange-400 bg-clip-text text-transparent">
                   Find Emergency Support Fast.
                 </span>
               </h2>
-              
-              <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-xl mx-auto lg:mx-0">
-                MediLink routes real-time telemetry to locate nearby operational trauma centers, immediate ambulance networks, and on-call ER physicians to bypass traditional queue delays when seconds count.
+
+              <p className="mx-auto max-w-xl text-xs leading-relaxed text-slate-400 sm:text-sm lg:mx-0">
+                MediLink helps users quickly call emergency support and locate
+                nearby emergency hospitals or ER rooms through Google Maps.
               </p>
             </div>
 
-            {/* Right Action Column (5 Columns) */}
-            <div className="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col gap-4 w-full sm:max-w-md sm:mx-auto lg:w-auto">
-              
-              {/* Primary Hotline Button */}
+            <div className="flex w-full flex-col gap-4 sm:mx-auto sm:max-w-md sm:flex-row lg:col-span-5 lg:w-auto lg:flex-col">
               <motion.a
-                href="tel:911"
+                href={`tel:${EMERGENCY_HELPLINE}`}
                 whileHover={{ scale: 1.02, brightness: 1.1 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 text-white font-bold text-sm rounded-2xl shadow-xl shadow-rose-950/40 transition-all duration-200"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 px-6 py-4 text-sm font-bold text-white shadow-xl shadow-rose-950/40 transition-all duration-200"
+                aria-label={`Call emergency helpline ${EMERGENCY_HELPLINE}`}
               >
-                <FiPhoneCall className="w-4 h-4 animate-bounce" />
+                <FiPhoneCall className="h-4 w-4 animate-bounce" />
                 Call Emergency Helpline
               </motion.a>
 
-              {/* Secondary Hospital Finder Button */}
               <motion.button
-                whileHover={{ scale: 1.02, backgroundColor: "rgba(244, 63, 94, 0.1)" }}
-                whileTap={{ scale: 0.98 }}
-                className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-[#031211] hover:text-rose-400 text-slate-300 font-medium text-sm rounded-2xl border border-rose-950/80 transition-all duration-200"
+                type="button"
+                onClick={handleLocateNearbyER}
+                disabled={isLocating}
+                whileHover={{
+                  scale: isLocating ? 1 : 1.02,
+                  backgroundColor: "rgba(244, 63, 94, 0.1)",
+                }}
+                whileTap={{ scale: isLocating ? 1 : 0.98 }}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-rose-950/80 bg-[#031211] px-6 py-4 text-sm font-medium text-slate-300 transition-all duration-200 hover:text-rose-400 disabled:cursor-wait disabled:opacity-75"
               >
-                <FiMapPin className="w-4 h-4 text-rose-500" />
-                Locate Nearby ER Rooms
+                {isLocating ? (
+                  <FiLoader className="h-4 w-4 animate-spin text-rose-500" />
+                ) : (
+                  <FiMapPin className="h-4 w-4 text-rose-500" />
+                )}
+
+                {isLocating ? "Locating nearby ER..." : "Locate Nearby ER Rooms"}
               </motion.button>
-
             </div>
-
           </div>
 
-          {/* Bottom Security Assurance Footnote */}
-          <div className="mt-8 pt-4 border-t border-rose-950/30 flex items-center gap-2 justify-center lg:justify-start text-[11px] text-slate-500">
-            <FiAlertTriangle className="text-rose-600/70 w-3.5 h-3.5" />
-            <span>Emergency locator services execute safely with zero latency caching. Your geolocation data remains strictly local.</span>
+          <div className="mt-8 flex items-center justify-center gap-2 border-t border-rose-950/30 pt-4 text-[11px] text-slate-500 lg:justify-start">
+            <FiAlertTriangle className="h-3.5 w-3.5 text-rose-600/70" />
+            <span>
+              Emergency locator opens Google Maps. Your browser may ask for
+              location permission.
+            </span>
           </div>
 
+          {locationMessage && (
+            <div className="mt-4 rounded-2xl border border-rose-500/15 bg-rose-500/5 px-4 py-3 text-center text-xs font-semibold text-rose-200 lg:text-left">
+              {locationMessage}
+            </div>
+          )}
         </motion.div>
       </div>
     </section>

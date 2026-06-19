@@ -121,6 +121,38 @@ function formatDoctorDisplayName(name = "") {
   return `Dr. ${cleanName}`;
 }
 
+
+function getMeetingLink(value = "") {
+  const cleanLink = String(value || "").trim();
+
+  if (!cleanLink) {
+    return "";
+  }
+
+  if (cleanLink.startsWith("http://") || cleanLink.startsWith("https://")) {
+    return cleanLink;
+  }
+
+  return `https://${cleanLink}`;
+}
+
+function canJoinVideoCall(appointment) {
+  const meetingLink = getMeetingLink(appointment?.meetingLink);
+  const status = String(appointment?.status || "").toLowerCase();
+
+  return Boolean(meetingLink) && status !== "cancelled" && status !== "completed";
+}
+
+function openMeetingLink(link) {
+  const safeLink = getMeetingLink(link);
+
+  if (!safeLink) {
+    return;
+  }
+
+  window.open(safeLink, "_blank", "noopener,noreferrer");
+}
+
 function ProfileAvatar({ src, name, editable = false }) {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -1068,59 +1100,97 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
           />
         ) : (
           <div className="space-y-3">
-            {appointments.map((appointment) => (
-              <RecordCard key={appointment._id}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-black text-slate-950">
-                      {formatDoctorDisplayName(
-                        appointment.doctor?.fullName ||
-                          appointment.doctor?.user?.name
-                      )}
-                    </p>
+            {appointments.map((appointment) => {
+              const meetingLink = getMeetingLink(appointment.meetingLink);
+              const joinAllowed = canJoinVideoCall(appointment);
 
-                    <p className="text-sm font-semibold text-emerald-700">
-                      {appointment.doctor?.specialization || "Consultation"}
-                    </p>
+              return (
+                <RecordCard key={appointment._id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-black text-slate-950">
+                        {formatDoctorDisplayName(
+                          appointment.doctor?.fullName ||
+                            appointment.doctor?.user?.name
+                        )}
+                      </p>
+
+                      <p className="text-sm font-semibold text-emerald-700">
+                        {appointment.doctor?.specialization || "Consultation"}
+                      </p>
+                    </div>
+
+                    <StatusBadge status={appointment.status} />
                   </div>
 
-                  <StatusBadge status={appointment.status} />
-                </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <InfoRow
+                      label="Date"
+                      value={formatDate(appointment.appointmentDate)}
+                    />
+                    <InfoRow
+                      label="Time"
+                      value={`${appointment.startTime || "—"} – ${
+                        appointment.endTime || "—"
+                      }`}
+                    />
+                    <InfoRow
+                      label="Payment"
+                      value={appointment.paymentStatus || "pending"}
+                    />
+                  </div>
 
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <InfoRow
-                    label="Date"
-                    value={formatDate(appointment.appointmentDate)}
-                  />
-                  <InfoRow
-                    label="Time"
-                    value={`${appointment.startTime || "—"} – ${
-                      appointment.endTime || "—"
-                    }`}
-                  />
-                  <InfoRow
-                    label="Payment"
-                    value={appointment.paymentStatus || "pending"}
-                  />
-                </div>
+                  {appointment.symptoms && (
+                    <p className="mt-2 text-sm text-slate-600">
+                      {appointment.symptoms}
+                    </p>
+                  )}
 
-                {appointment.symptoms && (
-                  <p className="mt-2 text-sm text-slate-600">
-                    {appointment.symptoms}
-                  </p>
-                )}
+                  <div className="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-700">
+                          Video Consultation
+                        </p>
 
-                {appointment.status === "pending" && (
-                  <button
-                    type="button"
-                    onClick={() => onCancel(appointment._id)}
-                    className="mt-3 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50"
-                  >
-                    Cancel appointment
-                  </button>
-                )}
-              </RecordCard>
-            ))}
+                        <p className="mt-1 text-sm font-semibold text-slate-700">
+                          {joinAllowed
+                            ? "Doctor has published the meeting link."
+                            : meetingLink
+                              ? "Meeting link is saved, but this appointment is already closed."
+                              : "Meeting link will appear here after doctor saves it."}
+                        </p>
+                      </div>
+
+                      {joinAllowed ? (
+                        <button
+                          type="button"
+                          onClick={() => openMeetingLink(meetingLink)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white transition hover:bg-cyan-700"
+                        >
+                          <ExternalLink size={16} />
+                          Join Video Call
+                        </button>
+                      ) : (
+                        <span className="rounded-xl border border-cyan-200 bg-white px-4 py-2 text-xs font-black text-cyan-700">
+                          Waiting for link
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {appointment.status === "pending" && (
+                    <button
+                      type="button"
+                      onClick={() => onCancel(appointment._id)}
+                      className="mt-3 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50"
+                    >
+                      Cancel appointment
+                    </button>
+                  )}
+                </RecordCard>
+              );
+            })}
           </div>
         )}
       </DataPanel>

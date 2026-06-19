@@ -11,8 +11,6 @@ const ALLOWED_SLOT_DAYS = [
   "Friday",
 ];
 
-const DOCTOR_STATUS = ["pending", "active", "inactive", "rejected", "blocked"];
-
 const sanitizeAvailableSlots = (slots = []) => {
   if (!Array.isArray(slots)) {
     return [];
@@ -52,34 +50,6 @@ const buildDoctorPayload = (body) => {
     }
   });
 
-  if (payload.fullName !== undefined) {
-    payload.fullName = String(payload.fullName || "").trim();
-  }
-
-  if (payload.specialization !== undefined) {
-    payload.specialization = String(payload.specialization || "").trim();
-  }
-
-  if (payload.department !== undefined) {
-    payload.department = String(payload.department || "").trim();
-  }
-
-  if (payload.qualification !== undefined) {
-    payload.qualification = String(payload.qualification || "").trim();
-  }
-
-  if (payload.bio !== undefined) {
-    payload.bio = String(payload.bio || "").trim();
-  }
-
-  if (payload.phone !== undefined) {
-    payload.phone = String(payload.phone || "").trim();
-  }
-
-  if (payload.imageUrl !== undefined) {
-    payload.imageUrl = String(payload.imageUrl || "").trim();
-  }
-
   if (payload.experienceYears !== undefined) {
     payload.experienceYears = Number(payload.experienceYears);
   }
@@ -95,69 +65,102 @@ const buildDoctorPayload = (body) => {
   return payload;
 };
 
-const getDoctorStatusFromAction = (actionOrStatus = "") => {
-  const value = String(actionOrStatus || "").trim().toLowerCase();
+const normalizeAdminDoctorStatus = (status = "active") => {
+  const normalized = String(status || "active").trim().toLowerCase();
 
-  const actionMap = {
-    approve: "active",
-    approved: "active",
-    activate: "active",
-    active: "active",
+  if (normalized === "inactive") return "suspended";
 
-    deactivate: "inactive",
-    inactive: "inactive",
-
-    reject: "rejected",
-    rejected: "rejected",
-
-    block: "blocked",
-    blocked: "blocked",
-
-    pending: "pending",
-  };
-
-  return actionMap[value] || "";
-};
-
-const getUserStatusForDoctorStatus = (doctorStatus) => {
-  if (doctorStatus === "active") return "active";
-  if (doctorStatus === "blocked") return "blocked";
-  if (["inactive", "rejected", "pending"].includes(doctorStatus)) {
-    return "inactive";
+  if (
+    ["pending", "active", "rejected", "suspended", "blocked"].includes(
+      normalized
+    )
+  ) {
+    return normalized;
   }
 
   return "active";
 };
 
-const getDefaultAdminNote = (status) => {
-  if (status === "active") {
-    return "Doctor profile approved and activated by MediLink admin.";
-  }
+const getDoctorModelStatus = (adminStatus = "active") => {
+  const normalized = normalizeAdminDoctorStatus(adminStatus);
 
-  if (status === "inactive") {
-    return "Doctor profile deactivated by MediLink admin.";
-  }
+  if (normalized === "active") return "active";
+  if (normalized === "pending") return "pending";
 
-  if (status === "rejected") {
-    return "Doctor profile rejected after admin review.";
-  }
-
-  if (status === "blocked") {
-    return "Doctor profile blocked by MediLink admin.";
-  }
-
-  if (status === "pending") {
-    return "Doctor profile moved back to pending review.";
-  }
-
-  return "Doctor profile status updated by MediLink admin.";
+  return "inactive";
 };
 
-const populateDoctor = (query) => {
-  return query.populate(
-    "user",
-    "name email phone role isVerified status profileImage createdAt"
-  );
+const getUserAccountStatus = (adminStatus = "active") => {
+  const normalized = normalizeAdminDoctorStatus(adminStatus);
+
+  if (normalized === "blocked") return "blocked";
+  if (["suspended", "rejected"].includes(normalized)) return "inactive";
+
+  return "active";
+};
+
+const buildAdminDoctorPayload = (doctorProfile, doctorUser) => {
+  const hasDoctorProfile = Boolean(doctorProfile);
+
+  const profileStatus = hasDoctorProfile
+    ? normalizeAdminDoctorStatus(doctorProfile.status)
+    : "pending";
+
+  const userStatus = String(doctorUser?.status || "active").toLowerCase();
+
+  let status = profileStatus;
+
+  if (userStatus === "blocked") {
+    status = "blocked";
+  } else if (userStatus === "inactive" && profileStatus === "active") {
+    status = "suspended";
+  }
+
+  return {
+    _id: hasDoctorProfile ? doctorProfile._id : doctorUser._id,
+    id: hasDoctorProfile ? doctorProfile._id : doctorUser._id,
+    userId: doctorUser._id,
+    hasDoctorProfile,
+    fullName: doctorProfile?.fullName || doctorUser?.name || "Unnamed Doctor",
+    specialization:
+      doctorProfile?.specialization || "Profile not completed yet",
+    department: doctorProfile?.department || "Pending Verification",
+    qualification: doctorProfile?.qualification || "Not submitted",
+    experienceYears:
+      doctorProfile?.experienceYears !== undefined
+        ? doctorProfile.experienceYears
+        : 0,
+    consultationFee:
+      doctorProfile?.consultationFee !== undefined
+        ? doctorProfile.consultationFee
+        : 0,
+    bio:
+      doctorProfile?.bio ||
+      "Doctor account created. Full professional profile is waiting for completion or admin verification.",
+    phone: doctorProfile?.phone || doctorUser?.phone || "",
+    imageUrl: doctorProfile?.imageUrl || doctorUser?.profileImage || "",
+    availableSlots: Array.isArray(doctorProfile?.availableSlots)
+      ? doctorProfile.availableSlots
+      : [],
+    rating: doctorProfile?.rating || 0,
+    totalReviews: doctorProfile?.totalReviews || 0,
+    status,
+    user: {
+      _id: doctorUser._id,
+      id: doctorUser._id,
+      name: doctorUser.name,
+      email: doctorUser.email,
+      phone: doctorUser.phone || "",
+      role: doctorUser.role,
+      isVerified: doctorUser.isVerified,
+      status: doctorUser.status || "active",
+      profileImage: doctorUser.profileImage || "",
+      createdAt: doctorUser.createdAt,
+      updatedAt: doctorUser.updatedAt,
+    },
+    createdAt: doctorProfile?.createdAt || doctorUser.createdAt,
+    updatedAt: doctorProfile?.updatedAt || doctorUser.updatedAt,
+  };
 };
 
 export const createDoctor = async (req, res) => {
@@ -174,8 +177,6 @@ export const createDoctor = async (req, res) => {
       phone,
       imageUrl,
       availableSlots,
-      status,
-      adminNote,
     } = req.body;
 
     if (
@@ -218,54 +219,25 @@ export const createDoctor = async (req, res) => {
       });
     }
 
-    const requestedStatus = getDoctorStatusFromAction(status) || "active";
-
-    if (!DOCTOR_STATUS.includes(requestedStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid doctor status",
-      });
-    }
-
     const doctor = await Doctor.create({
       user,
-      fullName: String(fullName || "").trim(),
-      specialization: String(specialization || "").trim(),
-      department: String(department || "").trim(),
-      qualification: String(qualification || "").trim(),
-      experienceYears: Number(experienceYears),
-      consultationFee: Number(consultationFee),
-      bio: String(bio || "").trim(),
-      phone: String(phone || "").trim(),
-      imageUrl: String(imageUrl || "").trim(),
+      fullName,
+      specialization,
+      department,
+      qualification,
+      experienceYears,
+      consultationFee,
+      bio,
+      phone,
+      imageUrl,
       availableSlots: sanitizeAvailableSlots(availableSlots),
-      status: requestedStatus,
-      adminNote: adminNote || getDefaultAdminNote(requestedStatus),
-      reviewedBy: req.user?._id || null,
-      reviewedAt: new Date(),
-      blockedAt: requestedStatus === "blocked" ? new Date() : null,
-      rejectedAt: requestedStatus === "rejected" ? new Date() : null,
+      status: "pending",
     });
-
-    await User.findByIdAndUpdate(
-      user,
-      {
-        name: String(fullName || existingUser.name || "").trim(),
-        phone: String(phone || existingUser.phone || "").trim(),
-        status: getUserStatusForDoctorStatus(requestedStatus),
-        isVerified: requestedStatus === "active" ? true : existingUser.isVerified,
-      },
-      {
-        runValidators: true,
-      }
-    );
-
-    const populatedDoctor = await populateDoctor(Doctor.findById(doctor._id));
 
     return res.status(201).json({
       success: true,
       message: "Doctor profile created successfully",
-      doctor: populatedDoctor,
+      doctor,
     });
   } catch (error) {
     return res.status(500).json({
@@ -285,8 +257,9 @@ export const getMyDoctorProfile = async (req, res) => {
       });
     }
 
-    const doctor = await populateDoctor(
-      Doctor.findOne({ user: req.user._id })
+    const doctor = await Doctor.findOne({ user: req.user._id }).populate(
+      "user",
+      "name email phone role isVerified status profileImage createdAt updatedAt"
     );
 
     return res.status(200).json({
@@ -338,80 +311,55 @@ export const updateMyDoctorProfile = async (req, res) => {
 
       payload.user = req.user._id;
       payload.status = "pending";
-      payload.adminNote = "Doctor profile submitted and waiting for admin review.";
 
       const createdDoctor = await Doctor.create(payload);
 
-      if (payload.fullName || payload.phone !== undefined) {
+      if (payload.fullName || payload.phone !== undefined || payload.imageUrl) {
         const userUpdate = {};
-
-        if (payload.fullName) {
-          userUpdate.name = payload.fullName;
-        }
-
-        if (payload.phone !== undefined) {
-          userUpdate.phone = payload.phone;
-        }
+        if (payload.fullName) userUpdate.name = payload.fullName;
+        if (payload.phone !== undefined) userUpdate.phone = payload.phone;
+        if (payload.imageUrl) userUpdate.profileImage = payload.imageUrl;
 
         await User.findByIdAndUpdate(req.user._id, userUpdate, {
           runValidators: true,
         });
       }
 
-      const populatedDoctor = await populateDoctor(
-        Doctor.findById(createdDoctor._id)
+      const populatedDoctor = await Doctor.findById(createdDoctor._id).populate(
+        "user",
+        "name email phone role isVerified status profileImage createdAt updatedAt"
       );
 
       return res.status(201).json({
         success: true,
-        message: "Doctor profile submitted for admin review",
+        message:
+          "Doctor profile created successfully. It is pending admin verification.",
         doctor: populatedDoctor,
       });
     }
 
-    if (["blocked", "rejected"].includes(existingDoctor.status)) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "This doctor profile cannot be updated because it is blocked or rejected. Please contact admin.",
-      });
-    }
-
     Object.assign(existingDoctor, payload);
-
-    if (existingDoctor.status === "active") {
-      existingDoctor.status = "pending";
-      existingDoctor.adminNote =
-        "Doctor profile updated and moved to pending review.";
-      existingDoctor.reviewedBy = null;
-      existingDoctor.reviewedAt = null;
-    }
-
     await existingDoctor.save();
 
-    if (payload.fullName || payload.phone !== undefined) {
+    if (payload.fullName || payload.phone !== undefined || payload.imageUrl) {
       const userUpdate = {};
-
-      if (payload.fullName) {
-        userUpdate.name = payload.fullName;
-      }
-
-      if (payload.phone !== undefined) {
-        userUpdate.phone = payload.phone;
-      }
+      if (payload.fullName) userUpdate.name = payload.fullName;
+      if (payload.phone !== undefined) userUpdate.phone = payload.phone;
+      if (payload.imageUrl) userUpdate.profileImage = payload.imageUrl;
 
       await User.findByIdAndUpdate(req.user._id, userUpdate, {
         runValidators: true,
       });
     }
 
-    const updatedDoctor = await populateDoctor(
-      Doctor.findById(existingDoctor._id)
+    const updatedDoctor = await Doctor.findById(existingDoctor._id).populate(
+      "user",
+      "name email phone role isVerified status profileImage createdAt updatedAt"
     );
 
     return res.status(200).json({
       success: true,
-      message: "Doctor profile updated and submitted for admin review",
+      message: "Doctor profile updated successfully",
       doctor: updatedDoctor,
     });
   } catch (error) {
@@ -447,9 +395,9 @@ export const getAllDoctors = async (req, res) => {
       ];
     }
 
-    const doctors = await populateDoctor(
-      Doctor.find(filter).sort({ createdAt: -1 })
-    );
+    const doctors = await Doctor.find(filter)
+      .populate("user", "name email phone role isVerified status profileImage")
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -467,33 +415,22 @@ export const getAllDoctors = async (req, res) => {
 
 export const getAdminDoctors = async (req, res) => {
   try {
-    const { status, specialization, department, search } = req.query;
+    const doctorUsers = await User.find({ role: "doctor" }).sort({
+      createdAt: -1,
+    });
 
-    const filter = {};
+    const doctorProfiles = await Doctor.find({
+      user: { $in: doctorUsers.map((doctorUser) => doctorUser._id) },
+    })
+      .populate("user", "name email phone role isVerified status profileImage")
+      .sort({ createdAt: -1 });
 
-    if (status && DOCTOR_STATUS.includes(status)) {
-      filter.status = status;
-    }
+    const profileMap = new Map(
+      doctorProfiles.map((profile) => [String(profile.user?._id), profile])
+    );
 
-    if (specialization) {
-      filter.specialization = { $regex: specialization, $options: "i" };
-    }
-
-    if (department) {
-      filter.department = { $regex: department, $options: "i" };
-    }
-
-    if (search) {
-      filter.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { specialization: { $regex: search, $options: "i" } },
-        { department: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const doctors = await populateDoctor(
-      Doctor.find(filter).sort({ createdAt: -1 })
+    const doctors = doctorUsers.map((doctorUser) =>
+      buildAdminDoctorPayload(profileMap.get(String(doctorUser._id)), doctorUser)
     );
 
     return res.status(200).json({
@@ -504,7 +441,68 @@ export const getAdminDoctors = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch admin doctor list",
+      message: "Failed to fetch admin doctor accounts",
+      error: error.message,
+    });
+  }
+};
+
+export const updateDoctorStatusByAdmin = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    const { status } = req.body;
+
+    const adminStatus = normalizeAdminDoctorStatus(status);
+    const doctorModelStatus = getDoctorModelStatus(adminStatus);
+    const userAccountStatus = getUserAccountStatus(adminStatus);
+
+    let doctorProfile = await Doctor.findById(doctorId).populate(
+      "user",
+      "name email phone role isVerified status profileImage createdAt updatedAt"
+    );
+
+    let doctorUser = null;
+
+    if (doctorProfile) {
+      doctorProfile.status = doctorModelStatus;
+      await doctorProfile.save();
+
+      doctorUser = await User.findByIdAndUpdate(
+        doctorProfile.user._id,
+        { status: userAccountStatus },
+        { new: true, runValidators: true }
+      );
+    } else {
+      doctorUser = await User.findOneAndUpdate(
+        { _id: doctorId, role: "doctor" },
+        { status: userAccountStatus },
+        { new: true, runValidators: true }
+      );
+
+      if (!doctorUser) {
+        return res.status(404).json({
+          success: false,
+          message: "Doctor account not found",
+        });
+      }
+    }
+
+    if (doctorProfile) {
+      doctorProfile = await Doctor.findById(doctorProfile._id).populate(
+        "user",
+        "name email phone role isVerified status profileImage createdAt updatedAt"
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Doctor status updated to ${adminStatus}`,
+      doctor: buildAdminDoctorPayload(doctorProfile, doctorUser),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update doctor status",
       error: error.message,
     });
   }
@@ -512,19 +510,15 @@ export const getAdminDoctors = async (req, res) => {
 
 export const getDoctorById = async (req, res) => {
   try {
-    const doctor = await populateDoctor(Doctor.findById(req.params.id));
+    const doctor = await Doctor.findById(req.params.id).populate(
+      "user",
+      "name email phone role isVerified status profileImage createdAt updatedAt"
+    );
 
     if (!doctor) {
       return res.status(404).json({
         success: false,
         message: "Doctor not found",
-      });
-    }
-
-    if (doctor.status !== "active") {
-      return res.status(404).json({
-        success: false,
-        message: "Doctor profile is not available",
       });
     }
 
@@ -536,163 +530,6 @@ export const getDoctorById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch doctor details",
-      error: error.message,
-    });
-  }
-};
-
-export const getAdminDoctorById = async (req, res) => {
-  try {
-    const doctor = await populateDoctor(Doctor.findById(req.params.id));
-
-    if (!doctor) {
-      return res.status(404).json({
-        success: false,
-        message: "Doctor not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      doctor,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch admin doctor details",
-      error: error.message,
-    });
-  }
-};
-
-export const updateDoctorByAdmin = async (req, res) => {
-  try {
-    const doctor = await Doctor.findById(req.params.id);
-
-    if (!doctor) {
-      return res.status(404).json({
-        success: false,
-        message: "Doctor not found",
-      });
-    }
-
-    const payload = buildDoctorPayload(req.body);
-
-    Object.assign(doctor, payload);
-
-    if (req.body.adminNote !== undefined) {
-      doctor.adminNote = String(req.body.adminNote || "").trim();
-    }
-
-    doctor.reviewedBy = req.user._id;
-    doctor.reviewedAt = new Date();
-
-    await doctor.save();
-
-    if (payload.fullName || payload.phone !== undefined || payload.imageUrl) {
-      const userUpdate = {};
-
-      if (payload.fullName) {
-        userUpdate.name = payload.fullName;
-      }
-
-      if (payload.phone !== undefined) {
-        userUpdate.phone = payload.phone;
-      }
-
-      if (payload.imageUrl) {
-        userUpdate.profileImage = payload.imageUrl;
-      }
-
-      await User.findByIdAndUpdate(doctor.user, userUpdate, {
-        runValidators: true,
-      });
-    }
-
-    const updatedDoctor = await populateDoctor(Doctor.findById(doctor._id));
-
-    return res.status(200).json({
-      success: true,
-      message: "Doctor profile updated by admin",
-      doctor: updatedDoctor,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update doctor profile by admin",
-      error: error.message,
-    });
-  }
-};
-
-export const updateDoctorStatus = async (req, res) => {
-  try {
-    const requestedStatus = getDoctorStatusFromAction(
-      req.body.status || req.body.action
-    );
-
-    if (!requestedStatus || !DOCTOR_STATUS.includes(requestedStatus)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid doctor action. Use approve, reject, block, activate, deactivate or pending.",
-      });
-    }
-
-    const doctor = await Doctor.findById(req.params.id);
-
-    if (!doctor) {
-      return res.status(404).json({
-        success: false,
-        message: "Doctor not found",
-      });
-    }
-
-    const adminNote = String(req.body.adminNote || "").trim();
-
-    doctor.status = requestedStatus;
-    doctor.adminNote = adminNote || getDefaultAdminNote(requestedStatus);
-    doctor.reviewedBy = req.user._id;
-    doctor.reviewedAt = new Date();
-
-    if (requestedStatus === "blocked") {
-      doctor.blockedAt = new Date();
-    }
-
-    if (requestedStatus === "rejected") {
-      doctor.rejectedAt = new Date();
-    }
-
-    if (requestedStatus === "active") {
-      doctor.blockedAt = null;
-      doctor.rejectedAt = null;
-    }
-
-    await doctor.save();
-
-    const userUpdate = {
-      status: getUserStatusForDoctorStatus(requestedStatus),
-    };
-
-    if (requestedStatus === "active") {
-      userUpdate.isVerified = true;
-    }
-
-    await User.findByIdAndUpdate(doctor.user, userUpdate, {
-      runValidators: true,
-    });
-
-    const updatedDoctor = await populateDoctor(Doctor.findById(doctor._id));
-
-    return res.status(200).json({
-      success: true,
-      message: `Doctor profile marked as ${requestedStatus}`,
-      doctor: updatedDoctor,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update doctor status",
       error: error.message,
     });
   }
