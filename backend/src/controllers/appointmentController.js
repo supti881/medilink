@@ -6,24 +6,6 @@ import PaymentTransaction from "../models/PaymentTransaction.js";
 const PLATFORM_COMMISSION_PERCENTAGE =
   Number(process.env.PLATFORM_COMMISSION_PERCENTAGE) || 10;
 
-const ALLOWED_APPOINTMENT_STATUS = [
-  "pending",
-  "approved",
-  "completed",
-  "cancelled",
-  "no_show",
-];
-
-const ALLOWED_PAYMENT_STATUS = [
-  "pending",
-  "paid",
-  "failed",
-  "waived",
-  "refunded",
-];
-
-const FINAL_APPOINTMENT_STATUS = ["completed", "cancelled", "no_show"];
-
 function calculateDoctorEarning(amount = 0) {
   const safeAmount = Math.max(Number(amount) || 0, 0);
   const platformFee = Math.round(
@@ -38,72 +20,69 @@ function calculateDoctorEarning(amount = 0) {
   };
 }
 
-function getValidStatusTransitions(currentStatus, userRole) {
-  const status = currentStatus || "pending";
-
-  if (userRole === "admin") {
-    if (status === "pending") {
-      return ["approved", "cancelled"];
-    }
-
-    if (status === "approved") {
-      return ["completed", "cancelled", "no_show"];
-    }
-
-    if (status === "completed") {
-      return [];
-    }
-
-    if (status === "cancelled") {
-      return [];
-    }
-
-    if (status === "no_show") {
-      return [];
-    }
-  }
-
-  if (userRole === "doctor") {
-    if (status === "pending") {
-      return ["approved", "cancelled"];
-    }
-
-    if (status === "approved") {
-      return ["completed", "cancelled", "no_show"];
-    }
-
-    return [];
-  }
-
-  if (userRole === "patient") {
-    if (["pending", "approved"].includes(status)) {
-      return ["cancelled"];
-    }
-
-    return [];
-  }
-
-  return [];
+function normalizeText(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^dr\.?\s+/i, "")
+    .replace(/\s+/g, " ");
 }
 
-async function populateAppointment(appointmentId) {
-  return Appointment.findById(appointmentId)
-    .populate("patient", "name email phone role status profileImage")
-    .populate({
-      path: "doctor",
-      populate: {
-        path: "user",
-        select: "name email phone role status profileImage",
-      },
-    })
-    .populate("statusUpdatedBy", "name email role")
-    .populate("cancelledBy", "name email role");
+function normalizePhone(value = "") {
+  return String(value || "").replace(/[^\d]/g, "");
 }
 
-async function getDoctorProfileByUser(userId) {
-  return Doctor.findOne({
-    user: userId,
+function isDoctorApprovedForBooking(doctorProfile) {
+  const doctorUser = doctorProfile?.user;
+
+  return (
+    doctorProfile &&
+    doctorProfile.status === "active" &&
+    doctorUser &&
+    doctorUser.role === "doctor" &&
+    (!doctorUser.status || doctorUser.status === "active")
+  );
+}
+
+function addUniqueDoctorProfile(map, profile) {
+  if (!profile?._id) return;
+  map.set(String(profile._id), profile);
+}
+
+async function getDoctorProfilesForLoggedInDoctor(user) {
+  const profileMap = new Map();
+
+  const linkedProfile = await Doctor.findOne({
+    user: user._id,
+  }).populate("user", "name email phone role status isVerified profileImage");
+
+  addUniqueDoctorProfile(profileMap, linkedProfile);
+
+  const userName = normalizeText(user.name);
+  const userEmail = normalizeText(user.email);
+  const userPhone = normalizePhone(user.phone);
+
+  const allDoctorProfiles = await Doctor.find({}).populate(
+    "user",
+    "name email phone role status isVerified profileImage"
+  );
+
+  allDoctorProfiles.forEach((profile) => {
+    const profileName = normalizeText(profile.fullName || profile.user?.name);
+    const profileEmail = normalizeText(profile.user?.email);
+    const profilePhone = normalizePhone(profile.phone || profile.user?.phone);
+
+    const sameUser = String(profile.user?._id || "") === String(user._id);
+    const sameEmail = userEmail && profileEmail && userEmail === profileEmail;
+    const samePhone = userPhone && profilePhone && userPhone === profilePhone;
+    const sameName = userName && profileName && userName === profileName;
+
+    if (sameUser || sameEmail || samePhone || sameName) {
+      addUniqueDoctorProfile(profileMap, profile);
+    }
   });
+
+  return Array.from(profileMap.values());
 }
 
 async function releaseDoctorEarningIfReady(appointment) {
@@ -177,21 +156,19 @@ async function releaseDoctorEarningIfReady(appointment) {
       appointment: releasedAppointment._id,
     },
     {
-      $set: {
-        amount,
-        platformFee,
-        doctorAmount: doctorEarning,
-        status: "released",
-        releasedAt: new Date(),
-        reference:
-          releasedAppointment.paymentReference ||
-          `MEDILINK-${releasedAppointment._id}`,
-      },
       $setOnInsert: {
         patient: releasedAppointment.patient,
         doctor: releasedAppointment.doctor,
         appointment: releasedAppointment._id,
+        amount,
+        platformFee,
+        doctorAmount: doctorEarning,
         paymentMethod: "mock",
+        status: "released",
+        reference:
+          releasedAppointment.paymentReference ||
+          `MEDILINK-${releasedAppointment._id}`,
+        releasedAt: new Date(),
       },
     },
     {
@@ -237,12 +214,16 @@ export const bookAppointment = async (req, res) => {
       });
     }
 
-    const doctorProfile = await Doctor.findById(doctor);
+    const doctorProfile = await Doctor.findById(doctor).populate(
+      "user",
+      "name email phone role status isVerified profileImage"
+    );
 
-    if (!doctorProfile || doctorProfile.status !== "active") {
-      return res.status(404).json({
+    if (!isDoctorApprovedForBooking(doctorProfile)) {
+      return res.status(403).json({
         success: false,
-        message: "Doctor not found or inactive",
+        message:
+          "This doctor is not approved for appointments yet. Please choose an approved doctor.",
       });
     }
 
@@ -326,14 +307,21 @@ export const bookAppointment = async (req, res) => {
       symptoms,
       medicalNotes,
       consultationType: consultationType || "video",
-      status: "pending",
       paymentAmount: Number(doctorProfile.consultationFee) || 0,
       paymentStatus: "pending",
       earningStatus: "not_ready",
       earningReleased: false,
     });
 
-    const populatedAppointment = await populateAppointment(appointment._id);
+    const populatedAppointment = await Appointment.findById(appointment._id)
+      .populate("patient", "name email phone role status profileImage")
+      .populate({
+        path: "doctor",
+        populate: {
+          path: "user",
+          select: "name email phone role status profileImage",
+        },
+      });
 
     return res.status(201).json({
       success: true,
@@ -361,8 +349,6 @@ export const getMyAppointments = async (req, res) => {
           select: "name email phone role status profileImage",
         },
       })
-      .populate("statusUpdatedBy", "name email role")
-      .populate("cancelledBy", "name email role")
       .sort({ appointmentDate: -1, createdAt: -1 });
 
     return res.status(200).json({
@@ -384,9 +370,10 @@ export const getDoctorAppointments = async (req, res) => {
     const filter = {};
 
     if (req.user.role === "doctor") {
-      const doctorProfile = await getDoctorProfileByUser(req.user._id);
+      const doctorProfiles = await getDoctorProfilesForLoggedInDoctor(req.user);
+      const doctorProfileIds = doctorProfiles.map((profile) => profile._id);
 
-      if (!doctorProfile) {
+      if (doctorProfileIds.length === 0) {
         return res.status(200).json({
           success: true,
           count: 0,
@@ -394,22 +381,13 @@ export const getDoctorAppointments = async (req, res) => {
         });
       }
 
-      filter.doctor = doctorProfile._id;
+      filter.doctor = {
+        $in: doctorProfileIds,
+      };
     }
 
     if (req.user.role === "admin" && req.query.doctor) {
       filter.doctor = req.query.doctor;
-    }
-
-    if (req.query.status && ALLOWED_APPOINTMENT_STATUS.includes(req.query.status)) {
-      filter.status = req.query.status;
-    }
-
-    if (
-      req.query.paymentStatus &&
-      ALLOWED_PAYMENT_STATUS.includes(req.query.paymentStatus)
-    ) {
-      filter.paymentStatus = req.query.paymentStatus;
     }
 
     const appointments = await Appointment.find(filter)
@@ -421,9 +399,7 @@ export const getDoctorAppointments = async (req, res) => {
           select: "name email phone role status profileImage",
         },
       })
-      .populate("statusUpdatedBy", "name email role")
-      .populate("cancelledBy", "name email role")
-      .sort({ appointmentDate: -1, createdAt: -1 });
+      .sort({ appointmentDate: 1, createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -433,7 +409,7 @@ export const getDoctorAppointments = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch appointments",
+      message: "Failed to fetch doctor appointments",
       error: error.message,
     });
   }
@@ -441,23 +417,19 @@ export const getDoctorAppointments = async (req, res) => {
 
 export const updateAppointmentStatus = async (req, res) => {
   try {
-    const {
-      status,
-      meetingLink,
-      paymentStatus,
-      paymentReference,
-      cancellationReason,
-      adminNote,
-    } = req.body;
+    const { status, meetingLink, paymentStatus, paymentReference } = req.body;
 
-    if (status && !ALLOWED_APPOINTMENT_STATUS.includes(status)) {
+    const allowedStatus = ["pending", "approved", "completed", "cancelled"];
+    const allowedPaymentStatus = ["pending", "paid", "failed", "waived"];
+
+    if (status && !allowedStatus.includes(status)) {
       return res.status(400).json({
         success: false,
         message: "Invalid appointment status",
       });
     }
 
-    if (paymentStatus && !ALLOWED_PAYMENT_STATUS.includes(paymentStatus)) {
+    if (paymentStatus && !allowedPaymentStatus.includes(paymentStatus)) {
       return res.status(400).json({
         success: false,
         message: "Invalid payment status",
@@ -474,15 +446,23 @@ export const updateAppointmentStatus = async (req, res) => {
     }
 
     if (req.user.role === "doctor") {
-      const doctorProfile = await getDoctorProfileByUser(req.user._id);
+      const doctorProfiles = await getDoctorProfilesForLoggedInDoctor(req.user);
+      const matchedDoctorProfile = doctorProfiles.find(
+        (profile) => String(profile._id) === String(appointment.doctor)
+      );
 
-      if (
-        !doctorProfile ||
-        appointment.doctor.toString() !== doctorProfile._id.toString()
-      ) {
+      if (!matchedDoctorProfile) {
         return res.status(403).json({
           success: false,
           message: "You are not allowed to update this appointment",
+        });
+      }
+
+      if (!isDoctorApprovedForBooking(matchedDoctorProfile)) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your doctor account is not approved or active. Appointment actions are disabled.",
         });
       }
     }
@@ -502,109 +482,23 @@ export const updateAppointmentStatus = async (req, res) => {
         });
       }
 
-      if (paymentStatus) {
+      if (
+        meetingLink !== undefined ||
+        paymentStatus !== undefined ||
+        paymentReference !== undefined
+      ) {
         return res.status(403).json({
           success: false,
-          message: "Patients cannot update payment status from this endpoint",
+          message: "Patients cannot update meeting or payment information",
         });
       }
     }
 
-    if (status) {
-      const allowedTransitions = getValidStatusTransitions(
-        appointment.status,
-        req.user.role
-      );
-
-      if (!allowedTransitions.includes(status)) {
-        return res.status(409).json({
-          success: false,
-          message: `Cannot change appointment from ${appointment.status} to ${status}`,
-        });
-      }
-
-      if (
-        FINAL_APPOINTMENT_STATUS.includes(appointment.status) &&
-        appointment.status !== status
-      ) {
-        return res.status(409).json({
-          success: false,
-          message: `This appointment is already ${appointment.status}`,
-        });
-      }
-
-      appointment.status = status;
-      appointment.statusUpdatedBy = req.user._id;
-      appointment.statusUpdatedAt = new Date();
-
-      if (status === "cancelled") {
-        appointment.cancelledBy = req.user._id;
-        appointment.cancelledAt = new Date();
-        appointment.cancellationReason =
-          cancellationReason ||
-          appointment.cancellationReason ||
-          "Appointment cancelled by authorized user";
-
-        if (!appointment.earningReleased) {
-          appointment.earningStatus = "not_ready";
-        }
-      }
-
-      if (status === "completed") {
-        appointment.completedAt = new Date();
-      }
-
-      if (status === "no_show") {
-        appointment.noShowAt = new Date();
-
-        if (!appointment.earningReleased) {
-          appointment.earningStatus = "not_ready";
-        }
-      }
-    }
-
-    if (meetingLink !== undefined) {
-      appointment.meetingLink = meetingLink;
-    }
-
+    if (status) appointment.status = status;
+    if (meetingLink !== undefined) appointment.meetingLink = meetingLink;
+    if (paymentStatus) appointment.paymentStatus = paymentStatus;
     if (paymentReference !== undefined) {
       appointment.paymentReference = paymentReference;
-    }
-
-    if (adminNote !== undefined && req.user.role === "admin") {
-      appointment.adminNote = adminNote;
-    }
-
-    if (paymentStatus) {
-      if (req.user.role !== "admin") {
-        return res.status(403).json({
-          success: false,
-          message: "Only admin can manually update payment status",
-        });
-      }
-
-      if (appointment.earningReleased && paymentStatus !== "paid") {
-        return res.status(409).json({
-          success: false,
-          message:
-            "Doctor earning is already released. Payment status cannot be changed here.",
-        });
-      }
-
-      appointment.paymentStatus = paymentStatus;
-
-      if (paymentStatus === "paid") {
-        const { platformFee, doctorEarning } = calculateDoctorEarning(
-          appointment.paymentAmount
-        );
-
-        appointment.platformFee = platformFee;
-        appointment.doctorEarning = doctorEarning;
-      }
-
-      if (paymentStatus === "refunded") {
-        appointment.earningStatus = "refunded";
-      }
     }
 
     await appointment.save();
@@ -615,7 +509,15 @@ export const updateAppointmentStatus = async (req, res) => {
       appointment = releasedAppointment;
     }
 
-    const updatedAppointment = await populateAppointment(appointment._id);
+    const updatedAppointment = await Appointment.findById(appointment._id)
+      .populate("patient", "name email phone role status profileImage")
+      .populate({
+        path: "doctor",
+        populate: {
+          path: "user",
+          select: "name email phone role status profileImage",
+        },
+      });
 
     return res.status(200).json({
       success: true,

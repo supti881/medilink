@@ -154,6 +154,17 @@ export const doctorApi = {
     return request("/doctors");
   },
 
+  getAdminDoctors: async () => {
+    return request("/doctors/admin/all");
+  },
+
+  updateDoctorStatus: async (doctorId, payload) => {
+    return request(`/doctors/admin/${doctorId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
   getMyProfile: async () => {
     return request("/doctors/me");
   },
