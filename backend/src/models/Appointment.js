@@ -16,22 +16,75 @@ const appointmentSchema = new mongoose.Schema(
 
     appointmentDate: {
       type: Date,
-      required: [true, "Appointment date is required"],
+      required: true,
     },
 
     appointmentDay: {
       type: String,
-      required: [true, "Appointment day is required"],
+      required: true,
+      trim: true,
     },
 
     startTime: {
       type: String,
-      required: [true, "Start time is required"],
+      required: true,
+      trim: true,
     },
 
     endTime: {
       type: String,
-      required: [true, "End time is required"],
+      required: true,
+      trim: true,
+    },
+
+    slotStartTime: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    slotEndTime: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    queuePosition: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+
+    slotCapacity: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
+
+    consultationMinutes: {
+      type: Number,
+      default: 10,
+      min: 5,
+    },
+
+    expectedStartTime: {
+      type: Date,
+      default: null,
+    },
+
+    expectedEndTime: {
+      type: Date,
+      default: null,
+    },
+
+    joinAvailableAt: {
+      type: Date,
+      default: null,
+    },
+
+    joinExpiresAt: {
+      type: Date,
+      default: null,
     },
 
     symptoms: {
@@ -48,19 +101,19 @@ const appointmentSchema = new mongoose.Schema(
 
     consultationType: {
       type: String,
-      enum: ["video", "audio", "chat"],
+      enum: ["video", "in_person"],
       default: "video",
+    },
+
+    meetingLink: {
+      type: String,
+      trim: true,
+      default: "",
     },
 
     status: {
       type: String,
-      enum: ["pending", "approved", "completed", "cancelled", "no_show"],
-      default: "pending",
-    },
-
-    paymentStatus: {
-      type: String,
-      enum: ["pending", "paid", "failed", "waived", "refunded"],
+      enum: ["pending", "approved", "completed", "cancelled"],
       default: "pending",
     },
 
@@ -68,6 +121,18 @@ const appointmentSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed", "waived"],
+      default: "pending",
+    },
+
+    paymentReference: {
+      type: String,
+      trim: true,
+      default: "",
     },
 
     platformFee: {
@@ -84,7 +149,7 @@ const appointmentSchema = new mongoose.Schema(
 
     earningStatus: {
       type: String,
-      enum: ["not_ready", "released", "refunded"],
+      enum: ["not_ready", "released"],
       default: "not_ready",
     },
 
@@ -97,72 +162,24 @@ const appointmentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-
-    paymentReference: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    meetingLink: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    cancellationReason: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    adminNote: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
-    statusUpdatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-
-    statusUpdatedAt: {
-      type: Date,
-      default: null,
-    },
-
-    cancelledBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-
-    cancelledAt: {
-      type: Date,
-      default: null,
-    },
-
-    completedAt: {
-      type: Date,
-      default: null,
-    },
-
-    noShowAt: {
-      type: Date,
-      default: null,
-    },
   },
   {
     timestamps: true,
   }
 );
 
-appointmentSchema.index({ patient: 1, appointmentDate: -1 });
-appointmentSchema.index({ doctor: 1, appointmentDate: -1 });
-appointmentSchema.index({ status: 1, appointmentDate: -1 });
-appointmentSchema.index({ paymentStatus: 1, createdAt: -1 });
+appointmentSchema.index({
+  doctor: 1,
+  appointmentDate: 1,
+  startTime: 1,
+  endTime: 1,
+  status: 1,
+});
+
+appointmentSchema.index({
+  patient: 1,
+  appointmentDate: 1,
+});
 
 const Appointment = mongoose.model("Appointment", appointmentSchema);
 

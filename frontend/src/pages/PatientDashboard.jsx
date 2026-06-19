@@ -136,11 +136,132 @@ function getMeetingLink(value = "") {
   return `https://${cleanLink}`;
 }
 
-function canJoinVideoCall(appointment) {
+function getValidDate(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function formatTimeOnly(value) {
+  const date = getValidDate(value);
+
+  if (!date) return "—";
+
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDateTimeShort(value) {
+  const date = getValidDate(value);
+
+  if (!date) return "—";
+
+  return `${date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+  })} · ${formatTimeOnly(value)}`;
+}
+
+function getConsultationWindowLabel(appointment) {
+  const expectedStart = getValidDate(appointment?.expectedStartTime);
+  const expectedEnd = getValidDate(appointment?.expectedEndTime);
+
+  if (expectedStart && expectedEnd) {
+    return `${formatTimeOnly(expectedStart)} – ${formatTimeOnly(expectedEnd)}`;
+  }
+
+  return `${appointment?.startTime || "—"} – ${appointment?.endTime || "—"}`;
+}
+
+function getQueueLabel(appointment) {
+  const queuePosition = Number(appointment?.queuePosition) || 1;
+  const slotCapacity = Number(appointment?.slotCapacity) || 1;
+
+  return `#${queuePosition} of ${slotCapacity}`;
+}
+
+function getJoinState(appointment) {
   const meetingLink = getMeetingLink(appointment?.meetingLink);
   const status = String(appointment?.status || "").toLowerCase();
+  const now = new Date();
+  const joinAvailableAt = getValidDate(appointment?.joinAvailableAt);
+  const joinExpiresAt = getValidDate(appointment?.joinExpiresAt);
 
-  return Boolean(meetingLink) && status !== "cancelled" && status !== "completed";
+  if (status === "cancelled") {
+    return {
+      meetingLink,
+      canJoin: false,
+      label: "Cancelled",
+      hint: "This appointment was cancelled, so the video link is closed.",
+      tone: "rose",
+    };
+  }
+
+  if (status === "completed") {
+    return {
+      meetingLink,
+      canJoin: false,
+      label: "Completed",
+      hint: "This consultation is already completed.",
+      tone: "slate",
+    };
+  }
+
+  if (!meetingLink) {
+    return {
+      meetingLink,
+      canJoin: false,
+      label: "Waiting for link",
+      hint: "The doctor will publish the meeting link before the consultation.",
+      tone: "cyan",
+    };
+  }
+
+  if (status === "pending") {
+    return {
+      meetingLink,
+      canJoin: false,
+      label: "Waiting for approval",
+      hint: "Join will be available after the appointment is approved.",
+      tone: "amber",
+    };
+  }
+
+  if (joinAvailableAt && now < joinAvailableAt) {
+    return {
+      meetingLink,
+      canJoin: false,
+      label: `Available at ${formatTimeOnly(joinAvailableAt)}`,
+      hint: `Your join button opens at ${formatDateTimeShort(joinAvailableAt)}.`,
+      tone: "cyan",
+    };
+  }
+
+  if (joinExpiresAt && now > joinExpiresAt) {
+    return {
+      meetingLink,
+      canJoin: false,
+      label: "Window closed",
+      hint: "The consultation joining window has already closed.",
+      tone: "slate",
+    };
+  }
+
+  return {
+    meetingLink,
+    canJoin: true,
+    label: "Join Video Call",
+    hint: "Your consultation window is active. Join the meeting when ready.",
+    tone: "emerald",
+  };
 }
 
 function openMeetingLink(link) {
@@ -1101,8 +1222,9 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
         ) : (
           <div className="space-y-3">
             {appointments.map((appointment) => {
-              const meetingLink = getMeetingLink(appointment.meetingLink);
-              const joinAllowed = canJoinVideoCall(appointment);
+              const joinState = getJoinState(appointment);
+              const queueLabel = getQueueLabel(appointment);
+              const consultationWindow = getConsultationWindowLabel(appointment);
 
               return (
                 <RecordCard key={appointment._id}>
@@ -1123,25 +1245,63 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                     <StatusBadge status={appointment.status} />
                   </div>
 
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
                     <InfoRow
                       label="Date"
                       value={formatDate(appointment.appointmentDate)}
                     />
-                    <InfoRow
-                      label="Time"
-                      value={`${appointment.startTime || "—"} – ${
-                        appointment.endTime || "—"
-                      }`}
-                    />
+                    <InfoRow label="Slot" value={`${appointment.startTime || "—"} – ${appointment.endTime || "—"}`} />
+                    <InfoRow label="Queue" value={queueLabel} />
                     <InfoRow
                       label="Payment"
                       value={appointment.paymentStatus || "pending"}
                     />
                   </div>
 
+                  <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                          Your Turn
+                        </p>
+                        <p className="mt-1 text-sm font-black text-slate-950">
+                          {queueLabel}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          Booking order inside this slot
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                          Consultation Window
+                        </p>
+                        <p className="mt-1 text-sm font-black text-slate-950">
+                          {consultationWindow}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          Estimated time based on queue
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                          Join Opens
+                        </p>
+                        <p className="mt-1 text-sm font-black text-slate-950">
+                          {appointment.joinAvailableAt
+                            ? formatDateTimeShort(appointment.joinAvailableAt)
+                            : "After doctor publishes link"}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          Usually 5 minutes before your turn
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   {appointment.symptoms && (
-                    <p className="mt-2 text-sm text-slate-600">
+                    <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
                       {appointment.symptoms}
                     </p>
                   )}
@@ -1154,26 +1314,22 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                         </p>
 
                         <p className="mt-1 text-sm font-semibold text-slate-700">
-                          {joinAllowed
-                            ? "Doctor has published the meeting link."
-                            : meetingLink
-                              ? "Meeting link is saved, but this appointment is already closed."
-                              : "Meeting link will appear here after doctor saves it."}
+                          {joinState.hint}
                         </p>
                       </div>
 
-                      {joinAllowed ? (
+                      {joinState.canJoin ? (
                         <button
                           type="button"
-                          onClick={() => openMeetingLink(meetingLink)}
+                          onClick={() => openMeetingLink(joinState.meetingLink)}
                           className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white transition hover:bg-cyan-700"
                         >
                           <ExternalLink size={16} />
-                          Join Video Call
+                          {joinState.label}
                         </button>
                       ) : (
                         <span className="rounded-xl border border-cyan-200 bg-white px-4 py-2 text-xs font-black text-cyan-700">
-                          Waiting for link
+                          {joinState.label}
                         </span>
                       )}
                     </div>
