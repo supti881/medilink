@@ -138,6 +138,13 @@ export const authApi = {
     });
   },
 
+  updatePatientProfile: async (patientId, payload) => {
+    return request(`/auth/admin/patients/${patientId}/profile`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
   logout: async () => {
     const data = await request("/auth/logout", {
       method: "POST",
@@ -154,17 +161,6 @@ export const doctorApi = {
     return request("/doctors");
   },
 
-  getAdminDoctors: async () => {
-    return request("/doctors/admin/all");
-  },
-
-  updateDoctorStatus: async (doctorId, payload) => {
-    return request(`/doctors/admin/${doctorId}/status`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  },
-
   getMyProfile: async () => {
     return request("/doctors/me");
   },
@@ -178,6 +174,17 @@ export const doctorApi = {
 
   getById: async (doctorId) => {
     return request(`/doctors/${doctorId}`);
+  },
+
+  getAdminDoctors: async () => {
+    return request("/doctors/admin/all");
+  },
+
+  updateDoctorStatus: async (doctorId, payload) => {
+    return request(`/doctors/admin/${doctorId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   },
 };
 
@@ -319,6 +326,26 @@ export const uploadApi = {
     formData.append("image", file);
 
     return uploadRequest("/uploads/doctor-photo", formData);
+  },
+};
+
+export const medicalRecordApi = {
+  upload: async (formData) => {
+    return uploadRequest("/medical-records", formData);
+  },
+
+  getMyRecords: async () => {
+    return request("/medical-records/my");
+  },
+
+  getPatientRecords: async (patientId) => {
+    return request(`/medical-records/patient/${patientId}`);
+  },
+
+  archive: async (recordId) => {
+    return request(`/medical-records/${recordId}/archive`, {
+      method: "PATCH",
+    });
   },
 };
 

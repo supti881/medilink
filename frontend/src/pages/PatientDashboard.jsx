@@ -16,6 +16,8 @@ import {
   Phone,
   Save,
   ShieldCheck,
+  Trash2,
+  UploadCloud,
   UserRound,
 } from "lucide-react";
 import BookAppointmentModal from "../components/BookAppointmentModal";
@@ -35,6 +37,7 @@ import {
   appointmentApi,
   authApi,
   doctorApi,
+  medicalRecordApi,
   paymentApi,
   prescriptionApi,
   replacementRequestApi,
@@ -120,6 +123,112 @@ function formatDoctorDisplayName(name = "") {
   }
 
   return `Dr. ${cleanName}`;
+}
+
+const medicalRecordCategoryOptions = [
+  ["previous_prescription", "Previous Prescription"],
+  ["lab_report", "Lab Report"],
+  ["xray_scan", "X-ray / Scan Report"],
+  ["discharge_summary", "Discharge Summary"],
+  ["diagnosis_report", "Diagnosis Report"],
+  ["allergy_record", "Allergy Record"],
+  ["chronic_condition", "Chronic Condition"],
+  ["other", "Other Medical File"],
+];
+
+function getMedicalRecordCategoryLabel(category = "other") {
+  const match = medicalRecordCategoryOptions.find(
+    ([value]) => value === category
+  );
+
+  return match ? match[1] : "Other Medical File";
+}
+
+function formatFileSize(size = 0) {
+  const bytes = Number(size) || 0;
+
+  if (bytes <= 0) {
+    return "File size unavailable";
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function openMedicalRecordFile(fileUrl = "") {
+  const safeUrl = getMediaUrl(fileUrl);
+
+  if (!safeUrl) {
+    return;
+  }
+
+  window.open(safeUrl, "_blank", "noopener,noreferrer");
+}
+
+function getAppointmentDoctorName(appointment) {
+  const doctorName =
+    appointment?.doctor?.fullName || appointment?.doctor?.user?.name || "";
+
+  return doctorName ? formatDoctorDisplayName(doctorName) : "Selected doctor";
+}
+
+function getAppointmentSpecialization(appointment) {
+  return (
+    appointment?.doctor?.specialization ||
+    appointment?.doctor?.department ||
+    "Consultation"
+  );
+}
+
+function getAppointmentTimeRange(appointment) {
+  const expectedStart = getValidDate(appointment?.expectedStartTime);
+  const expectedEnd = getValidDate(appointment?.expectedEndTime);
+
+  if (expectedStart && expectedEnd) {
+    return `${formatTimeOnly(expectedStart)} – ${formatTimeOnly(expectedEnd)}`;
+  }
+
+  return `${appointment?.startTime || "—"} – ${appointment?.endTime || "—"}`;
+}
+
+function getAppointmentShareLabel(appointment) {
+  if (!appointment || typeof appointment === "string") {
+    return "General medical history";
+  }
+
+  return `${getAppointmentDoctorName(appointment)} · ${formatDate(
+    appointment.appointmentDate
+  )} · ${getAppointmentTimeRange(appointment)}`;
+}
+
+function getMedicalRecordShareInfo(record) {
+  const linkedAppointment = record?.appointment;
+
+  if (!linkedAppointment || typeof linkedAppointment === "string") {
+    return {
+      label: "General medical history",
+      hint:
+        record?.visibility === "patient_only"
+          ? "Private file — not shared with any doctor"
+          : "Doctor-visible general history — available to doctors during appointments",
+      tone: record?.visibility === "patient_only" ? "slate" : "cyan",
+    };
+  }
+
+  return {
+    label: `Shared with ${getAppointmentDoctorName(linkedAppointment)}`,
+    hint: `${getAppointmentSpecialization(linkedAppointment)} · ${formatDate(
+      linkedAppointment.appointmentDate
+    )} · ${getAppointmentTimeRange(linkedAppointment)}`,
+    tone: "emerald",
+  };
 }
 
 function escapePrescriptionHtml(value = "") {
@@ -325,7 +434,6 @@ function printPrescription(prescription) {
   }, 350);
 }
 
-
 function getMeetingLink(value = "") {
   const cleanLink = String(value || "").trim();
 
@@ -513,7 +621,6 @@ function ProfileAvatar({ src, name, editable = false }) {
     </div>
   );
 }
-
 function PatientDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -525,6 +632,7 @@ function PatientDashboard() {
   const [payments, setPayments] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [replacementRequests, setReplacementRequests] = useState([]);
+  const [medicalRecords, setMedicalRecords] = useState([]);
 
   const [profileForm, setProfileForm] = useState(emptyProfileForm);
   const [profileEditing, setProfileEditing] = useState(false);
@@ -548,6 +656,7 @@ function PatientDashboard() {
         "appointments",
         "doctors",
         "payments",
+        "medical-history",
         "support",
         "reissue",
         "verify-rx",
@@ -611,6 +720,7 @@ function PatientDashboard() {
           paymentsResponse,
           ticketsResponse,
           replacementResponse,
+          medicalRecordsResponse,
         ] = await Promise.all([
           doctorApi.getAll(),
           appointmentApi.getMyAppointments(),
@@ -618,6 +728,7 @@ function PatientDashboard() {
           paymentApi.getMyPayments(),
           supportTicketApi.getMyTickets(),
           replacementRequestApi.getMyRequests(),
+          medicalRecordApi.getMyRecords(),
         ]);
 
         setUser(currentUser);
@@ -630,6 +741,7 @@ function PatientDashboard() {
         setPayments(paymentsResponse.payments || []);
         setTickets(ticketsResponse.tickets || []);
         setReplacementRequests(replacementResponse.requests || []);
+        setMedicalRecords(medicalRecordsResponse.records || []);
         setLastSynced(new Date().toISOString());
       } catch (err) {
         setError(
@@ -814,6 +926,28 @@ function PatientDashboard() {
     }
   };
 
+  const handleMedicalRecordUpload = async (payload) => {
+    try {
+      await medicalRecordApi.upload(payload);
+      await fetchDashboardData(true);
+      return { success: true };
+    } catch (err) {
+      return {
+        success: false,
+        message: err.message || "Could not upload medical history file.",
+      };
+    }
+  };
+
+  const handleMedicalRecordArchive = async (recordId) => {
+    try {
+      await medicalRecordApi.archive(recordId);
+      await fetchDashboardData(true);
+    } catch (err) {
+      setError(err.message || "Could not archive medical record.");
+    }
+  };
+
   if (loading) {
     return <LoadingScreen message="Loading your health dashboard" />;
   }
@@ -852,6 +986,7 @@ function PatientDashboard() {
             payments={payments}
             tickets={tickets}
             replacementRequests={replacementRequests}
+            medicalRecords={medicalRecords}
             pendingAppointments={pendingAppointments}
             paidPayments={paidPayments}
             activeTickets={activeTickets}
@@ -901,6 +1036,16 @@ function PatientDashboard() {
 
         {activeLayout === "payments" && <PaymentsLayout payments={payments} />}
 
+        {activeLayout === "medical-history" && (
+          <MedicalHistoryLayout
+            records={medicalRecords}
+            appointments={appointments}
+            onUpload={handleMedicalRecordUpload}
+            onArchive={handleMedicalRecordArchive}
+            onRefresh={() => fetchDashboardData(true)}
+          />
+        )}
+
         {activeLayout === "support" && <SupportLayout tickets={tickets} />}
 
         {activeLayout === "reissue" && (
@@ -921,13 +1066,13 @@ function PatientDashboard() {
     </>
   );
 }
-
 function OverviewLayout({
   appointments,
   prescriptions,
   payments,
   tickets,
   replacementRequests,
+  medicalRecords,
   pendingAppointments,
   paidPayments,
   activeTickets,
@@ -937,7 +1082,7 @@ function OverviewLayout({
 
   return (
     <section id="overview" className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard
           icon={<CalendarDays size={20} />}
           label="Appointments"
@@ -951,6 +1096,14 @@ function OverviewLayout({
           label="Prescriptions"
           value={prescriptions.length}
           tone="emerald"
+        />
+
+        <StatCard
+          icon={<UploadCloud size={20} />}
+          label="Medical records"
+          value={medicalRecords.length}
+          hint="history files"
+          tone="cyan"
         />
 
         <StatCard
@@ -1419,136 +1572,133 @@ function ProfileEditForm({
     </form>
   );
 }
-
 function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
   return (
-    <section id="appointments">
+    <section id="appointments" className="scroll-mt-6">
       <DataPanel
-        title="My appointments"
-        subtitle={`${appointments.length} records from database`}
-        actionText="Find doctors"
-        actionLink="/patient-dashboard#doctors"
+        title="My Appointments"
+        subtitle={`${appointments.length} appointment records`}
         onRefresh={onRefresh}
       >
         {appointments.length === 0 ? (
           <EmptyState
-            text="No appointments yet. Book a doctor below."
-            actionText="Browse doctors"
+            text="No appointment booked yet."
+            actionText="Book appointment"
             actionLink="/patient-dashboard#doctors"
           />
         ) : (
-          <div className="space-y-3">
+          <div className="grid gap-4 xl:grid-cols-2">
             {appointments.map((appointment) => {
+              const doctorName = formatDoctorDisplayName(
+                appointment.doctor?.fullName || appointment.doctor?.user?.name
+              );
               const joinState = getJoinState(appointment);
-              const queueLabel = getQueueLabel(appointment);
-              const consultationWindow = getConsultationWindowLabel(appointment);
 
               return (
                 <RecordCard key={appointment._id}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-black text-slate-950">
-                        {formatDoctorDisplayName(
-                          appointment.doctor?.fullName ||
-                            appointment.doctor?.user?.name
-                        )}
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-lg font-black text-slate-950">
+                        {doctorName}
                       </p>
 
-                      <p className="text-sm font-semibold text-emerald-700">
-                        {appointment.doctor?.specialization || "Consultation"}
+                      <p className="mt-1 text-sm font-bold text-emerald-700">
+                        {appointment.doctor?.specialization ||
+                          appointment.doctor?.department ||
+                          "Consultation"}
                       </p>
                     </div>
 
                     <StatusBadge status={appointment.status} />
                   </div>
 
-                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <InfoRow
                       label="Date"
                       value={formatDate(appointment.appointmentDate)}
                     />
-                    <InfoRow label="Slot" value={`${appointment.startTime || "—"} – ${appointment.endTime || "—"}`} />
-                    <InfoRow label="Queue" value={queueLabel} />
+
                     <InfoRow
-                      label="Payment"
-                      value={appointment.paymentStatus || "pending"}
+                      label="Slot"
+                      value={`${appointment.startTime || "—"} - ${
+                        appointment.endTime || "—"
+                      }`}
+                    />
+
+                    <InfoRow
+                      label="Queue"
+                      value={getQueueLabel(appointment)}
+                    />
+
+                    <InfoRow
+                      label="Consultation Window"
+                      value={getConsultationWindowLabel(appointment)}
+                    />
+
+                    <InfoRow
+                      label="Join Opens"
+                      value={
+                        appointment.joinAvailableAt
+                          ? formatDateTimeShort(appointment.joinAvailableAt)
+                          : "After doctor publishes link"
+                      }
+                    />
+
+                    <InfoRow
+                      label="Fee"
+                      value={`৳${
+                        appointment.consultationFee ||
+                        appointment.doctor?.consultationFee ||
+                        0
+                      }`}
                     />
                   </div>
 
-                  <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
-                          Your Turn
-                        </p>
-                        <p className="mt-1 text-sm font-black text-slate-950">
-                          {queueLabel}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">
-                          Booking order inside this slot
-                        </p>
-                      </div>
+                  {appointment.reason && (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                        Symptoms / Reason
+                      </p>
 
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
-                          Consultation Window
-                        </p>
-                        <p className="mt-1 text-sm font-black text-slate-950">
-                          {consultationWindow}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">
-                          Estimated time based on queue
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
-                          Join Opens
-                        </p>
-                        <p className="mt-1 text-sm font-black text-slate-950">
-                          {appointment.joinAvailableAt
-                            ? formatDateTimeShort(appointment.joinAvailableAt)
-                            : "After doctor publishes link"}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">
-                          Usually 5 minutes before your turn
-                        </p>
-                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {appointment.reason}
+                      </p>
                     </div>
-                  </div>
-
-                  {appointment.symptoms && (
-                    <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      {appointment.symptoms}
-                    </p>
                   )}
 
-                  <div className="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4">
+                  <div
+                    className={`mt-4 rounded-2xl border px-4 py-3 ${
+                      joinState.tone === "emerald"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : joinState.tone === "amber"
+                        ? "border-amber-200 bg-amber-50"
+                        : joinState.tone === "rose"
+                        ? "border-rose-200 bg-rose-50"
+                        : joinState.tone === "cyan"
+                        ? "border-cyan-200 bg-cyan-50"
+                        : "border-slate-200 bg-slate-50"
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-700">
-                          Video Consultation
+                        <p className="text-sm font-black text-slate-950">
+                          {joinState.label}
                         </p>
 
-                        <p className="mt-1 text-sm font-semibold text-slate-700">
+                        <p className="mt-1 text-xs font-semibold text-slate-600">
                           {joinState.hint}
                         </p>
                       </div>
 
-                      {joinState.canJoin ? (
-                        <button
-                          type="button"
-                          onClick={() => openMeetingLink(joinState.meetingLink)}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white transition hover:bg-cyan-700"
-                        >
-                          <ExternalLink size={16} />
-                          {joinState.label}
-                        </button>
-                      ) : (
-                        <span className="rounded-xl border border-cyan-200 bg-white px-4 py-2 text-xs font-black text-cyan-700">
-                          {joinState.label}
-                        </span>
-                      )}
+                      <button
+                        type="button"
+                        disabled={!joinState.canJoin}
+                        onClick={() => openMeetingLink(joinState.meetingLink)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                      >
+                        <ExternalLink size={15} />
+                        Join
+                      </button>
                     </div>
                   </div>
 
@@ -1556,7 +1706,7 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                     <button
                       type="button"
                       onClick={() => onCancel(appointment._id)}
-                      className="mt-3 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50"
+                      className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-black text-red-700 transition hover:bg-red-100"
                     >
                       Cancel appointment
                     </button>
@@ -1572,44 +1722,84 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
 }
 
 function DoctorsLayout({ doctors, onBook }) {
+  const activeDoctors = doctors.filter((doctor) => {
+    const doctorStatus = String(doctor.status || "active").toLowerCase();
+    const userStatus = String(doctor.user?.status || "active").toLowerCase();
+
+    return doctorStatus === "active" && userStatus === "active";
+  });
+
   return (
-    <section id="doctors">
+    <section id="doctors" className="scroll-mt-6">
       <DataPanel
-        title="Find doctors"
-        subtitle={`${doctors.length} doctors available for consultation`}
-        actionText="Open doctors page"
-        actionLink="/doctors"
+        title="Find Doctors"
+        subtitle={`${activeDoctors.length} approved doctors available`}
       >
-        {doctors.length === 0 ? (
-          <EmptyState text="No doctor available right now." />
+        {activeDoctors.length === 0 ? (
+          <EmptyState text="No approved doctor is available right now." />
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
-            {doctors.map((doctor) => (
+            {activeDoctors.map((doctor) => (
               <RecordCard key={doctor._id}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-lg font-black text-slate-950">
+                <div className="flex gap-4">
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-emerald-100">
+                    {doctor.imageUrl ||
+                    doctor.profileImage ||
+                    doctor.user?.profileImage ? (
+                      <img
+                        src={getMediaUrl(
+                          doctor.imageUrl ||
+                            doctor.profileImage ||
+                            doctor.user?.profileImage
+                        )}
+                        alt={doctor.fullName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-lg font-black text-emerald-700">
+                        {doctor.fullName?.charAt(0)?.toUpperCase() || "D"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-lg font-black text-slate-950">
                       {formatDoctorDisplayName(
                         doctor.fullName || doctor.user?.name
                       )}
                     </p>
+
                     <p className="mt-1 text-sm font-bold text-emerald-700">
-                      {doctor.specialization || doctor.department || "Doctor"}
+                      {doctor.specialization || "General Physician"}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {doctor.department || "General"} · ৳
+
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      {doctor.department || "MediLink Doctor"} · ৳
                       {doctor.consultationFee || 0}
                     </p>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => onBook(doctor)}
-                    className="shrink-0 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700"
-                  >
-                    Book
-                  </button>
                 </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <InfoRow
+                    label="Experience"
+                    value={`${doctor.experience || 0} years`}
+                  />
+
+                  <InfoRow
+                    label="Qualification"
+                    value={doctor.qualification || "Not added"}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onBook(doctor)}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+                >
+                  <CalendarDays size={17} />
+                  Book Appointment
+                </button>
               </RecordCard>
             ))}
           </div>
@@ -1621,37 +1811,42 @@ function DoctorsLayout({ doctors, onBook }) {
 
 function PaymentsLayout({ payments }) {
   return (
-    <section id="payments">
-      <DataPanel
-        title="Payments"
-        subtitle={`${payments.length} payment records`}
-        actionText="Pay now"
-        actionLink="/mock-payment"
-      >
+    <section id="payments" className="scroll-mt-6">
+      <DataPanel title="Payment History" subtitle={`${payments.length} records`}>
         {payments.length === 0 ? (
-          <EmptyState
-            text="No payments yet."
-            actionText="Make payment"
-            actionLink="/mock-payment"
-          />
+          <EmptyState text="No payment record found." />
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
             {payments.map((payment) => (
               <RecordCard key={payment._id}>
-                <div className="flex justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-xl font-black text-slate-950">
-                      ৳{payment.amount || 0}
+                    <p className="font-black text-slate-950">
+                      {payment.reason || payment.paymentFor || "Payment"}
                     </p>
-                    <p className="text-xs text-slate-500">
-                      {formatDate(payment.createdAt)} ·{" "}
-                      {payment.paymentMethod || "mock"}
+
+                    <p className="mt-1 text-sm font-bold text-emerald-700">
+                      ৳{payment.amount || 0}
                     </p>
                   </div>
 
                   <StatusBadge
-                    status={payment.status || payment.paymentStatus}
+                    status={payment.paymentStatus || payment.status || "paid"}
                   />
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <InfoRow
+                    label="Method"
+                    value={payment.paymentMethod || "Not added"}
+                  />
+
+                  <InfoRow
+                    label="Transaction"
+                    value={payment.transactionId || "Not added"}
+                  />
+
+                  <InfoRow label="Date" value={formatDate(payment.createdAt)} />
                 </div>
               </RecordCard>
             ))}
@@ -1662,33 +1857,381 @@ function PaymentsLayout({ payments }) {
   );
 }
 
+function MedicalHistoryLayout({
+  records,
+  appointments,
+  onUpload,
+  onArchive,
+  onRefresh,
+}) {
+  const [form, setForm] = useState({
+    title: "",
+    category: "previous_prescription",
+    appointment: "",
+    visibility: "patient_doctor",
+    notes: "",
+    file: null,
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [uploadError, setUploadError] = useState("");
+
+  const activeAppointments = appointments.filter((appointment) =>
+    ["pending", "approved", "completed"].includes(
+      String(appointment.status || "").toLowerCase()
+    )
+  );
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((previousForm) => ({
+      ...previousForm,
+      [name]: value,
+    }));
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+
+    setForm((previousForm) => ({
+      ...previousForm,
+      file,
+    }));
+  };
+
+  const resetForm = () => {
+    setForm({
+      title: "",
+      category: "previous_prescription",
+      appointment: "",
+      visibility: "patient_doctor",
+      notes: "",
+      file: null,
+    });
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setMessage("");
+    setUploadError("");
+
+    if (!form.title.trim()) {
+      setUploadError("Please write a title for this medical file.");
+      return;
+    }
+
+    if (!form.file) {
+      setUploadError("Please select a file to upload.");
+      return;
+    }
+
+    const payload = new FormData();
+
+    payload.append("title", form.title.trim());
+    payload.append("category", form.category);
+    payload.append("visibility", form.visibility);
+    payload.append("notes", form.notes.trim());
+    payload.append("file", form.file);
+
+    if (form.appointment) {
+      payload.append("appointment", form.appointment);
+    }
+
+    setSubmitting(true);
+
+    const response = await onUpload(payload);
+
+    setSubmitting(false);
+
+    if (!response.success) {
+      setUploadError(response.message || "Upload failed.");
+      return;
+    }
+
+    resetForm();
+    event.target.reset();
+    setMessage("Medical history file uploaded successfully.");
+  };
+
+  return (
+    <section id="medical-history" className="scroll-mt-6 space-y-6">
+      <DataPanel
+        title="Medical History"
+        subtitle="Upload previous prescriptions, reports, scans, and clinical documents"
+        onRefresh={onRefresh}
+      >
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {message && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800">
+              {message}
+            </div>
+          )}
+
+          {uploadError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
+              {uploadError}
+            </div>
+          )}
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <FormField
+              label="File Title"
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              placeholder="Example: Previous diabetes prescription"
+            />
+
+            <SelectField
+              label="Category"
+              name="category"
+              value={form.category}
+              onChange={handleChange}
+              options={medicalRecordCategoryOptions}
+            />
+
+            <SelectField
+              label="Attach to appointment"
+              name="appointment"
+              value={form.appointment}
+              onChange={handleChange}
+              options={[
+                ["", "General medical history"],
+                ...activeAppointments.map((appointment) => [
+                  appointment._id,
+                  getAppointmentShareLabel(appointment),
+                ]),
+              ]}
+            />
+
+            <SelectField
+              label="Visibility"
+              name="visibility"
+              value={form.visibility}
+              onChange={handleChange}
+              options={[
+                ["patient_doctor", "Doctor visible"],
+                ["patient_only", "Patient only"],
+              ]}
+            />
+
+            <TextAreaField
+              label="Patient Note"
+              name="notes"
+              value={form.notes}
+              onChange={handleChange}
+              placeholder="Write short note for doctor, if needed"
+              className="lg:col-span-2"
+            />
+
+            <label className="lg:col-span-2 block rounded-[24px] border border-dashed border-emerald-300 bg-emerald-50/60 p-5 transition hover:border-emerald-500 hover:bg-emerald-50">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-emerald-700 shadow-sm">
+                    <UploadCloud size={22} />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-black text-slate-950">
+                      Upload medical file
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      JPG, PNG, WEBP, PDF, DOC, DOCX · Max 5MB
+                    </p>
+
+                    {form.file && (
+                      <p className="mt-2 text-sm font-black text-emerald-700">
+                        Selected: {form.file.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <span className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white">
+                  Choose File
+                </span>
+              </div>
+
+              <input
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? (
+              <Loader2 size={17} className="animate-spin" />
+            ) : (
+              <UploadCloud size={17} />
+            )}
+            {submitting ? "Uploading..." : "Upload Medical File"}
+          </button>
+        </form>
+      </DataPanel>
+
+      <DataPanel
+        title="Uploaded Files"
+        subtitle={`${records.length} active medical history files`}
+      >
+        {records.length === 0 ? (
+          <EmptyState text="No medical history file uploaded yet." />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {records.map((record) => {
+              const shareInfo = getMedicalRecordShareInfo(record);
+
+              return (
+                <RecordCard key={record._id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-lg font-black text-slate-950">
+                        {record.title}
+                      </p>
+
+                      <p className="mt-1 text-sm font-bold text-emerald-700">
+                        {getMedicalRecordCategoryLabel(record.category)}
+                      </p>
+                    </div>
+
+                    <StatusBadge
+                      status={
+                        record.visibility === "patient_only"
+                          ? "private"
+                          : "doctor visible"
+                      }
+                    />
+                  </div>
+
+                  <div
+                    className={`mt-4 rounded-2xl border px-4 py-3 ${
+                      shareInfo.tone === "emerald"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : shareInfo.tone === "cyan"
+                        ? "border-cyan-200 bg-cyan-50"
+                        : "border-slate-200 bg-slate-50"
+                    }`}
+                  >
+                    <p className="text-sm font-black text-slate-950">
+                      {shareInfo.label}
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold text-slate-600">
+                      {shareInfo.hint}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <InfoRow
+                      label="Original File"
+                      value={record.originalName || "Uploaded file"}
+                    />
+
+                    <InfoRow
+                      label="Size"
+                      value={formatFileSize(record.fileSize)}
+                    />
+
+                    <InfoRow
+                      label="Uploaded"
+                      value={formatDate(record.createdAt)}
+                    />
+
+                    <InfoRow
+                      label="Linked Appointment"
+                      value={record.linkedAppointmentLabel || "General"}
+                    />
+                  </div>
+
+                  {record.notes && (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                        Note
+                      </p>
+
+                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                        {record.notes}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openMedicalRecordFile(record.fileUrl)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700"
+                    >
+                      <ExternalLink size={15} />
+                      View
+                    </button>
+
+                    <a
+                      href={getMediaUrl(record.fileUrl)}
+                      download={record.originalName || record.title}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+                    >
+                      <Download size={15} />
+                      Download
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => onArchive(record._id)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-black text-red-700 transition hover:bg-red-100"
+                    >
+                      <Trash2 size={15} />
+                      Archive
+                    </button>
+                  </div>
+                </RecordCard>
+              );
+            })}
+          </div>
+        )}
+      </DataPanel>
+    </section>
+  );
+}
 function SupportLayout({ tickets }) {
   return (
-    <section id="support">
-      <DataPanel
-        title="Support"
-        subtitle={`${tickets.length} support tickets`}
-        actionText="New ticket"
-        actionLink="/support-ticket"
-      >
+    <section id="support" className="scroll-mt-6">
+      <DataPanel title="Support Tickets" subtitle={`${tickets.length} records`}>
         {tickets.length === 0 ? (
-          <EmptyState
-            text="No support ticket found."
-            actionText="Create support ticket"
-            actionLink="/support-ticket"
-          />
+          <EmptyState text="No support ticket found." />
         ) : (
           <div className="space-y-3">
             {tickets.map((ticket) => (
               <RecordCard key={ticket._id}>
-                <div className="flex justify-between gap-3">
-                  <p className="font-black text-slate-950">{ticket.subject}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-black text-slate-950">
+                      {ticket.subject || "Support request"}
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      {ticket.category || "General"} ·{" "}
+                      {formatDate(ticket.createdAt)}
+                    </p>
+                  </div>
+
                   <StatusBadge status={ticket.status} />
                 </div>
 
-                <p className="mt-2 line-clamp-3 text-sm text-slate-600">
-                  {ticket.message}
-                </p>
+                {ticket.message && (
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    {ticket.message}
+                  </p>
+                )}
               </RecordCard>
             ))}
           </div>
@@ -1700,31 +2243,36 @@ function SupportLayout({ tickets }) {
 
 function ReissueLayout({ replacementRequests }) {
   return (
-    <section id="reissue">
+    <section id="reissue" className="scroll-mt-6">
       <DataPanel
-        title="Prescription reissue"
-        subtitle={`${replacementRequests.length} reissue requests`}
-        actionText="New reissue request"
-        actionLink="/replacement-request"
+        title="Replacement / Reissue Requests"
+        subtitle={`${replacementRequests.length} records`}
       >
         {replacementRequests.length === 0 ? (
-          <EmptyState
-            text="No reissue request found."
-            actionText="Request reissue"
-            actionLink="/replacement-request"
-          />
+          <EmptyState text="No replacement request found." />
         ) : (
           <div className="space-y-3">
             {replacementRequests.map((request) => (
               <RecordCard key={request._id}>
-                <div className="flex justify-between gap-3">
-                  <p className="font-black text-slate-950">
-                    {request.requestType}
-                  </p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-black text-slate-950">
+                      {request.reason || request.requestType || "Reissue request"}
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      {formatDate(request.createdAt)}
+                    </p>
+                  </div>
+
                   <StatusBadge status={request.status} />
                 </div>
 
-                <p className="mt-2 text-sm text-slate-600">{request.reason}</p>
+                {request.description && (
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    {request.description}
+                  </p>
+                )}
               </RecordCard>
             ))}
           </div>
@@ -1736,81 +2284,79 @@ function ReissueLayout({ replacementRequests }) {
 
 function VerifyPrescriptionLayout({ prescriptions }) {
   return (
-    <section id="verify-rx" className="space-y-6">
+    <section id="verify-rx" className="scroll-mt-6">
       <DataPanel
-        title="Verify prescription"
-        subtitle="Use verification token to check prescription authenticity"
-        actionText="Open verifier"
-        actionLink="/verify-prescription"
+        title="Prescription Verification"
+        subtitle={`${prescriptions.length} prescription records`}
       >
-        <div className="rounded-3xl border border-emerald-100 bg-emerald-50/70 p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-500 text-white">
-              <ShieldCheck size={26} />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <h3 className="text-xl font-black text-slate-950">
-                Prescription authenticity checker
-              </h3>
-              <p className="mt-1 text-sm text-slate-600">
-                Open the verifier page and enter the RX token from your
-                prescription.
-              </p>
-            </div>
-
-            <Link
-              to="/verify-prescription"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
-            >
-              Verify now
-              <ExternalLink size={16} />
-            </Link>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {prescriptions.length === 0 ? (
-            <EmptyState text="No prescription token found." />
-          ) : (
-            prescriptions.map((rx) => (
-              <RecordCard key={rx._id}>
+        {prescriptions.length === 0 ? (
+          <EmptyState text="No prescription found." />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {prescriptions.map((prescription) => (
+              <RecordCard key={prescription._id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-black text-slate-950">
-                      {rx.diagnosis || "Prescription"}
+                    <p className="text-lg font-black text-slate-950">
+                      {prescription.diagnosis || "Prescription"}
                     </p>
-                    <p className="mt-1 font-mono text-xs font-bold text-emerald-700">
-                      {rx.verificationToken || "No token"}
+
+                    <p className="mt-1 text-sm font-bold text-emerald-700">
+                      {getPrescriptionDoctorName(prescription)}
                     </p>
                   </div>
 
-                  <StatusBadge status={rx.status} />
+                  <StatusBadge status={prescription.status || "issued"} />
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => printPrescription(rx)}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700"
-                  >
-                    <Download size={15} />
-                    Download
-                  </button>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <InfoRow
+                    label="Patient"
+                    value={getPrescriptionPatientName(prescription)}
+                  />
 
-                  <button
-                    type="button"
-                    onClick={() => downloadPrescriptionHtml(rx)}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <FileText size={15} />
-                    Download HTML
-                  </button>
+                  <InfoRow
+                    label="Date"
+                    value={formatDate(
+                      prescription.createdAt || prescription.date
+                    )}
+                  />
+
+                  <InfoRow
+                    label="Verification Token"
+                    value={prescription.verificationToken || "Not available"}
+                  />
+
+                  <InfoRow
+                    label="Medicines"
+                    value={`${getPrescriptionMedicines(prescription).length} item(s)`}
+                  />
                 </div>
+
+                {prescription.notes && (
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                      Doctor Note
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-700">
+                      {prescription.notes}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => printPrescription(prescription)}
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700"
+                >
+                  <Download size={15} />
+                  Download
+                </button>
               </RecordCard>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </DataPanel>
     </section>
   );
@@ -1827,37 +2373,44 @@ function FormField({
 }) {
   return (
     <label className={`block ${className}`}>
-      <span className="mb-2 block text-sm font-black text-slate-700">
+      <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
         {label}
       </span>
 
       <input
         type={type}
         name={name}
-        value={value}
+        value={value || ""}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
       />
     </label>
   );
 }
 
-function SelectField({ label, name, value, onChange, options }) {
+function SelectField({
+  label,
+  name,
+  value,
+  onChange,
+  options = [],
+  className = "",
+}) {
   return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-black text-slate-700">
+    <label className={`block ${className}`}>
+      <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
         {label}
       </span>
 
       <select
         name={name}
-        value={value}
+        value={value || ""}
         onChange={onChange}
-        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
       >
         {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue || "empty"} value={optionValue}>
+          <option key={optionValue} value={optionValue}>
             {optionLabel}
           </option>
         ))}
@@ -1876,17 +2429,17 @@ function TextAreaField({
 }) {
   return (
     <label className={`block ${className}`}>
-      <span className="mb-2 block text-sm font-black text-slate-700">
+      <span className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500">
         {label}
       </span>
 
       <textarea
         name={name}
-        value={value}
+        value={value || ""}
         onChange={onChange}
-        rows={3}
         placeholder={placeholder}
-        className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+        rows={4}
+        className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
       />
     </label>
   );
