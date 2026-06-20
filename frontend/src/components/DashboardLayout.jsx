@@ -117,6 +117,11 @@ function getNavItems(role) {
       icon: BadgeCheck,
     },
     { label: "Find doctors", to: "/doctors", icon: Stethoscope },
+    {
+      label: "Medical History",
+      to: "/patient-dashboard#medical-history",
+      icon: Database,
+    },
     { label: "Payments", to: "/mock-payment", icon: CreditCard },
     { label: "Support", to: "/support-ticket", icon: Headphones },
     { label: "Reissue", to: "/replacement-request", icon: FileCheck2 },
