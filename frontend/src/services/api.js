@@ -12,6 +12,28 @@ const setToken = (token) => {
 const removeToken = () => {
   localStorage.removeItem("medilink_token");
 };
+const parseResponse = async (response) => {
+  const text = await response.text();
+  let data = {};
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
+
+  if (!response.ok) {
+    const detailMessage = data.error
+      ? `${data.message || "Request failed"}: ${data.error}`
+      : data.message || `Request failed (${response.status})`;
+
+    throw new Error(detailMessage);
+  }
+
+  return data;
+};
 
 const request = async (endpoint, options = {}) => {
   const token = getToken();
@@ -33,22 +55,7 @@ const request = async (endpoint, options = {}) => {
     credentials: "include",
   });
 
-  const text = await response.text();
-  let data = {};
-
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text };
-    }
-  }
-
-  if (!response.ok) {
-    throw new Error(data.message || `Request failed (${response.status})`);
-  }
-
-  return data;
+  return parseResponse(response);
 };
 
 const uploadRequest = async (endpoint, formData) => {
@@ -67,22 +74,7 @@ const uploadRequest = async (endpoint, formData) => {
     credentials: "include",
   });
 
-  const text = await response.text();
-  let data = {};
-
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text };
-    }
-  }
-
-  if (!response.ok) {
-    throw new Error(data.message || `Upload failed (${response.status})`);
-  }
-
-  return data;
+  return parseResponse(response);
 };
 
 export const authApi = {
@@ -345,6 +337,43 @@ export const medicalRecordApi = {
   archive: async (recordId) => {
     return request(`/medical-records/${recordId}/archive`, {
       method: "PATCH",
+    });
+  },
+};
+
+export const aiApi = {
+  ask: async (payload) => {
+    return request("/ai/ask", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  patientSymptoms: async (payload) => {
+    return request("/ai/patient/symptoms", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  doctorPrescription: async (payload) => {
+    return request("/ai/doctor/prescription", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  doctorClinicalNote: async (payload) => {
+    return request("/ai/doctor/clinical-note", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  adminSupport: async (payload) => {
+    return request("/ai/admin/support", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 };

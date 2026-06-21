@@ -13,6 +13,7 @@ import supportTicketRoutes from "./routes/supportTicketRoutes.js";
 import replacementRequestRoutes from "./routes/replacementRequestRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import medicalRecordRoutes from "./routes/medicalRecordRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 dotenv.config();
 
@@ -38,12 +39,9 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
-
-// Static uploads
-app.use("/uploads", express.static("uploads"));
 
 // Root route
 app.get("/", (req, res) => {
@@ -68,12 +66,26 @@ app.use("/api/support-tickets", supportTicketRoutes);
 app.use("/api/replacement-requests", replacementRequestRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/medical-records", medicalRecordRoutes);
+app.use("/api/ai", aiRoutes);
+
+// Static uploaded files
+app.use("/uploads", express.static("uploads"));
 
 // 404 route
 app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "API route not found",
+  });
+});
+
+// Error handler
+app.use((error, req, res, next) => {
+  console.error("Server error:", error);
+
+  res.status(error.status || 500).json({
+    success: false,
+    message: error.message || "Internal server error",
   });
 });
 
