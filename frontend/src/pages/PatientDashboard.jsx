@@ -34,6 +34,7 @@ import {
   StatusBadge,
 } from "../components/dashboard/ui";
 import {
+  aiApi,
   appointmentApi,
   authApi,
   doctorApi,
@@ -187,6 +188,40 @@ function getAppointmentSpecialization(appointment) {
   );
 }
 
+function getValidDate(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function formatTimeOnly(value) {
+  const date = getValidDate(value);
+
+  if (!date) return "—";
+
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDateTimeShort(value) {
+  const date = getValidDate(value);
+
+  if (!date) return "—";
+
+  return `${date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+  })} · ${formatTimeOnly(value)}`;
+}
+
 function getAppointmentTimeRange(appointment) {
   const expectedStart = getValidDate(appointment?.expectedStartTime);
   const expectedEnd = getValidDate(appointment?.expectedEndTime);
@@ -308,7 +343,6 @@ function getPrescriptionFileName(prescription) {
 
   return `MediLink-Prescription-${cleanToken}`;
 }
-
 function buildPrescriptionDocumentHtml(prescription) {
   const medicines = getPrescriptionMedicines(prescription);
   const doctorName = getPrescriptionDoctorName(prescription);
@@ -446,40 +480,6 @@ function getMeetingLink(value = "") {
   }
 
   return `https://${cleanLink}`;
-}
-
-function getValidDate(value) {
-  if (!value) return null;
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
-}
-
-function formatTimeOnly(value) {
-  const date = getValidDate(value);
-
-  if (!date) return "—";
-
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatDateTimeShort(value) {
-  const date = getValidDate(value);
-
-  if (!date) return "—";
-
-  return `${date.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-  })} · ${formatTimeOnly(value)}`;
 }
 
 function getConsultationWindowLabel(appointment) {
@@ -621,6 +621,7 @@ function ProfileAvatar({ src, name, editable = false }) {
     </div>
   );
 }
+
 function PatientDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -657,6 +658,7 @@ function PatientDashboard() {
         "doctors",
         "payments",
         "medical-history",
+        "ai-assistant",
         "support",
         "reissue",
         "verify-rx",
@@ -696,8 +698,7 @@ function PatientDashboard() {
       medicalNotes: currentUser.medicalNotes || "",
     }));
   };
-
-  const fetchDashboardData = useCallback(
+    const fetchDashboardData = useCallback(
     async (isRefresh = false) => {
       try {
         if (isRefresh) setRefreshing(true);
@@ -1046,6 +1047,10 @@ function PatientDashboard() {
           />
         )}
 
+        {activeLayout === "ai-assistant" && (
+          <PatientAiAssistantLayout user={user} />
+        )}
+
         {activeLayout === "support" && <SupportLayout tickets={tickets} />}
 
         {activeLayout === "reissue" && (
@@ -1066,6 +1071,7 @@ function PatientDashboard() {
     </>
   );
 }
+
 function OverviewLayout({
   appointments,
   prescriptions,
@@ -1214,7 +1220,6 @@ function OverviewLayout({
     </section>
   );
 }
-
 function ProfileLayout({
   user,
   profileForm,
@@ -1572,6 +1577,7 @@ function ProfileEditForm({
     </form>
   );
 }
+
 function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
   return (
     <section id="appointments" className="scroll-mt-6">
@@ -1856,7 +1862,6 @@ function PaymentsLayout({ payments }) {
     </section>
   );
 }
-
 function MedicalHistoryLayout({
   records,
   appointments,
@@ -1994,12 +1999,15 @@ function MedicalHistoryLayout({
             />
 
             <SelectField
-              label="Attach to appointment"
+              label="Select Doctor / Appointment to Share With"
               name="appointment"
               value={form.appointment}
               onChange={handleChange}
               options={[
-                ["", "General medical history"],
+                [
+                  "",
+                  "General medical history — not linked with any specific doctor",
+                ],
                 ...activeAppointments.map((appointment) => [
                   appointment._id,
                   getAppointmentShareLabel(appointment),
@@ -2027,7 +2035,7 @@ function MedicalHistoryLayout({
               className="lg:col-span-2"
             />
 
-            <label className="lg:col-span-2 block rounded-[24px] border border-dashed border-emerald-300 bg-emerald-50/60 p-5 transition hover:border-emerald-500 hover:bg-emerald-50">
+            <label className="block rounded-[24px] border border-dashed border-emerald-300 bg-emerald-50/60 p-5 transition hover:border-emerald-500 hover:bg-emerald-50 lg:col-span-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
                   <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-emerald-700 shadow-sm">
@@ -2202,6 +2210,205 @@ function MedicalHistoryLayout({
     </section>
   );
 }
+
+function PatientAiAssistantLayout({ user }) {
+  const [form, setForm] = useState({
+    symptoms: "",
+    duration: "",
+    age: "",
+    gender: user?.gender || "",
+    existingConditions: "",
+    currentMedicines: "",
+    extraNotes: "",
+  });
+
+  const [answer, setAnswer] = useState("");
+  const [disclaimer, setDisclaimer] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((previousForm) => ({
+      ...previousForm,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!form.symptoms.trim()) {
+      setAiError("Please write your symptoms first.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setAiError("");
+      setAnswer("");
+      setDisclaimer("");
+
+      const response = await aiApi.patientSymptoms({
+        symptoms: form.symptoms,
+        duration: form.duration,
+        age: form.age,
+        gender: form.gender,
+        existingConditions: form.existingConditions,
+        currentMedicines: form.currentMedicines,
+        extraNotes: form.extraNotes,
+      });
+
+      setAnswer(response.answer || "AI could not generate guidance right now.");
+      setDisclaimer(response.disclaimer || "");
+    } catch (error) {
+      setAiError(error.message || "AI assistant failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section id="ai-assistant" className="scroll-mt-6 space-y-6">
+      <DataPanel
+        title="Patient AI Assistant"
+        subtitle="Describe symptoms and get safe guidance before booking a doctor"
+      >
+        <div className="mb-5 rounded-[26px] border border-amber-200 bg-amber-50 px-5 py-4">
+          <p className="text-sm font-black text-amber-900">Safety Notice</p>
+          <p className="mt-1 text-sm font-semibold leading-6 text-amber-800">
+            This AI assistant cannot diagnose disease or prescribe medicine.
+            For serious symptoms like chest pain, breathing difficulty,
+            fainting, heavy bleeding, severe allergic reaction, or stroke signs,
+            seek emergency care immediately.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {aiError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
+              {aiError}
+            </div>
+          )}
+
+          <TextAreaField
+            label="Symptoms"
+            name="symptoms"
+            value={form.symptoms}
+            onChange={handleChange}
+            placeholder="Example: Fever, headache, cough, chest pain, stomach pain..."
+          />
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <FormField
+              label="Duration"
+              name="duration"
+              value={form.duration}
+              onChange={handleChange}
+              placeholder="Example: 2 days / 1 week"
+            />
+
+            <FormField
+              label="Age"
+              name="age"
+              value={form.age}
+              onChange={handleChange}
+              placeholder="Example: 25"
+            />
+
+            <SelectField
+              label="Gender"
+              name="gender"
+              value={form.gender}
+              onChange={handleChange}
+              options={[
+                ["", "Select gender"],
+                ["male", "Male"],
+                ["female", "Female"],
+                ["other", "Other"],
+              ]}
+            />
+
+            <FormField
+              label="Current Medicines"
+              name="currentMedicines"
+              value={form.currentMedicines}
+              onChange={handleChange}
+              placeholder="Example: Paracetamol, insulin, BP medicine"
+            />
+
+            <TextAreaField
+              label="Existing Conditions"
+              name="existingConditions"
+              value={form.existingConditions}
+              onChange={handleChange}
+              placeholder="Example: Diabetes, asthma, high blood pressure"
+              className="lg:col-span-2"
+            />
+
+            <TextAreaField
+              label="Extra Notes"
+              name="extraNotes"
+              value={form.extraNotes}
+              onChange={handleChange}
+              placeholder="Any additional information"
+              className="lg:col-span-2"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? (
+              <Loader2 size={17} className="animate-spin" />
+            ) : (
+              <HeartPulse size={17} />
+            )}
+            {loading ? "AI is checking..." : "Get AI Guidance"}
+          </button>
+        </form>
+      </DataPanel>
+
+      {(answer || disclaimer) && (
+        <DataPanel
+          title="AI Guidance"
+          subtitle="Review this guidance and book a doctor if needed"
+        >
+          {answer && (
+            <div className="rounded-[26px] border border-emerald-100 bg-emerald-50 px-5 py-5">
+              <p className="whitespace-pre-line text-sm font-semibold leading-7 text-slate-800">
+                {answer}
+              </p>
+            </div>
+          )}
+
+          {disclaimer && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                Disclaimer
+              </p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                {disclaimer}
+              </p>
+            </div>
+          )}
+
+          <Link
+           to="/patient-dashboard#doctors"
+           className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+          >
+           <CalendarDays size={17} />
+            Book Doctor Appointment
+         </Link>
+        </DataPanel>
+      )}
+    </section>
+  );
+}
+
 function SupportLayout({ tickets }) {
   return (
     <section id="support" className="scroll-mt-6">
@@ -2257,7 +2464,9 @@ function ReissueLayout({ replacementRequests }) {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-black text-slate-950">
-                      {request.reason || request.requestType || "Reissue request"}
+                      {request.reason ||
+                        request.requestType ||
+                        "Reissue request"}
                     </p>
 
                     <p className="mt-1 text-sm font-semibold text-slate-500">
