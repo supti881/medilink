@@ -20,6 +20,7 @@ import {
   Wallet,
 } from "lucide-react";
 import {
+  aiApi,
   appointmentApi,
   authApi,
   doctorApi,
@@ -502,6 +503,10 @@ export default function DoctorDashboard() {
   );
   const [payoutForm, setPayoutForm] = useState(emptyPayoutForm);
 
+  const [prescriptionAiAnswer, setPrescriptionAiAnswer] = useState("");
+  const [prescriptionAiError, setPrescriptionAiError] = useState("");
+  const [prescriptionAiLoading, setPrescriptionAiLoading] = useState(false);
+
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [meetingLinks, setMeetingLinks] = useState(() => readStoredMeetingLinks());
   const [savedMeetingLinkIds, setSavedMeetingLinkIds] = useState({});
@@ -899,6 +904,54 @@ export default function DoctorDashboard() {
       [name]: value,
     }));
   };
+    const handlePrescriptionAiDraft = async () => {
+    if (
+      !selectedAppointment &&
+      !prescriptionForm.diagnosis &&
+      !prescriptionForm.symptoms
+    ) {
+      setPrescriptionAiError(
+        "Please select an appointment or write symptoms/diagnosis first."
+      );
+      return;
+    }
+
+    try {
+      setPrescriptionAiLoading(true);
+      setPrescriptionAiError("");
+      setPrescriptionAiAnswer("");
+
+      const response = await aiApi.doctorPrescription({
+        patientName: selectedAppointment?.patient?.name || "",
+        age: selectedAppointment?.patient?.age || "",
+        gender: selectedAppointment?.patient?.gender || "",
+        symptoms:
+          prescriptionForm.symptoms ||
+          selectedAppointment?.symptoms ||
+          selectedAppointment?.reason ||
+          "",
+        diagnosis: prescriptionForm.diagnosis,
+        clinicalNotes:
+          selectedAppointment?.medicalNotes ||
+          selectedAppointment?.notes ||
+          "",
+        medicines: prescriptionForm.medicines,
+        tests: prescriptionForm.tests,
+        advice: prescriptionForm.advice,
+        followUpPlan: prescriptionForm.followUpDate,
+      });
+
+      setPrescriptionAiAnswer(
+        response.answer || "AI could not generate prescription support text."
+      );
+    } catch (error) {
+      setPrescriptionAiError(
+        error.message || "AI prescription helper failed. Please try again."
+      );
+    } finally {
+      setPrescriptionAiLoading(false);
+    }
+  };
 
   const handlePrescriptionSubmit = async (event) => {
     event.preventDefault();
@@ -1084,6 +1137,10 @@ export default function DoctorDashboard() {
           prescriptions={prescriptions}
           selectedAppointment={selectedAppointment}
           prescriptionForm={prescriptionForm}
+          prescriptionAiAnswer={prescriptionAiAnswer}
+          prescriptionAiError={prescriptionAiError}
+          prescriptionAiLoading={prescriptionAiLoading}
+          onGenerateAiDraft={handlePrescriptionAiDraft}
           actionLoading={actionLoading}
           hasPrescriptionForAppointment={hasPrescriptionForAppointment}
           onSelectAppointment={setSelectedAppointment}
@@ -2304,10 +2361,14 @@ function PrescriptionsLayout({
   prescriptions,
   selectedAppointment,
   prescriptionForm,
+  prescriptionAiAnswer,
+  prescriptionAiError,
+  prescriptionAiLoading,
   actionLoading,
   hasPrescriptionForAppointment,
   onSelectAppointment,
   onChange,
+  onGenerateAiDraft,
   onSubmit,
 }) {
   const eligibleAppointments = appointments.filter(
@@ -2358,6 +2419,51 @@ function PrescriptionsLayout({
               <p className="mt-1 text-sm font-semibold text-slate-600">
                 {formatDate(selectedAppointment.appointmentDate)} ·{" "}
                 {selectedAppointment.startTime} - {selectedAppointment.endTime}
+              </p>
+            </div>
+          )}
+        </div>
+                <div className="mb-5 rounded-3xl border border-cyan-200 bg-cyan-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-cyan-950">
+                AI Prescription Helper
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-cyan-800">
+                Generate clean clinical note, patient-friendly explanation,
+                advice wording, and follow-up instruction. Doctor must review
+                before saving.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onGenerateAiDraft}
+              disabled={prescriptionAiLoading}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {prescriptionAiLoading ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <Pill size={15} />
+              )}
+              {prescriptionAiLoading ? "Generating..." : "Generate AI Draft"}
+            </button>
+          </div>
+
+          {prescriptionAiError && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
+              {prescriptionAiError}
+            </div>
+          )}
+
+          {prescriptionAiAnswer && (
+            <div className="mt-4 rounded-2xl border border-white bg-white px-4 py-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                AI Draft
+              </p>
+              <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-7 text-slate-700">
+                {prescriptionAiAnswer}
               </p>
             </div>
           )}
