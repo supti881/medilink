@@ -8,8 +8,10 @@ import {
   Pill,
   Search,
   ShieldCheck,
+  Sparkles,
   Stethoscope,
   UserRound,
+  XCircle,
 } from "lucide-react";
 
 const prescription = {
@@ -39,112 +41,179 @@ const prescription = {
 
 function PrescriptionVerify() {
   const [token, setToken] = useState("RX-ML-2026-0924");
-  const [showResult, setShowResult] = useState(true);
+  const [verificationState, setVerificationState] = useState("valid");
 
   const handleVerify = () => {
-    setShowResult(token.trim().length > 0);
+    const cleanToken = token.trim();
+
+    if (!cleanToken) {
+      setVerificationState("empty");
+      return;
+    }
+
+    if (cleanToken.toUpperCase() === prescription.token.toUpperCase()) {
+      setVerificationState("valid");
+      return;
+    }
+
+    setVerificationState("invalid");
   };
 
+  const isValid = verificationState === "valid";
+  const isInvalid = verificationState === "invalid";
+  const isEmpty = verificationState === "empty";
+
   return (
-    <section className="relative overflow-hidden px-6 py-12">
-      <div className="absolute left-[-160px] top-[-160px] h-96 w-96 rounded-full bg-teal-200/40 blur-3xl" />
-      <div className="absolute bottom-[-160px] right-[-120px] h-96 w-96 rounded-full bg-cyan-200/50 blur-3xl" />
+    <section className="relative overflow-hidden bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="pointer-events-none absolute -left-32 top-0 h-72 w-72 rounded-full bg-emerald-300/30 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 h-72 w-72 rounded-full bg-cyan-300/30 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-1/2 h-72 w-72 rounded-full bg-violet-300/20 blur-3xl" />
 
       <div className="relative mx-auto max-w-7xl">
-        <div className="rounded-[2rem] bg-slate-950 p-8 text-white shadow-xl shadow-slate-200">
-          <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-200">
+          <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-teal-200">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-white/10 px-4 py-2 text-xs font-black text-emerald-200 backdrop-blur">
                 <ShieldCheck className="h-4 w-4" />
                 Secure Prescription Verification
               </div>
 
-              <h2 className="mt-5 text-4xl font-black tracking-tight md:text-5xl">
-                Verify digital prescriptions using a secure MediLink token.
-              </h2>
+              <h1 className="mt-5 max-w-3xl text-3xl font-black leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
+                Verify prescriptions with a{" "}
+                <span className="bg-gradient-to-r from-emerald-300 via-cyan-300 to-sky-300 bg-clip-text text-transparent">
+                  secure MediLink token.
+                </span>
+              </h1>
 
-              <p className="mt-4 max-w-3xl leading-8 text-slate-300">
-                Enter a prescription token to confirm authenticity. This public verification
-                page only displays safe summary details and protects confidential patient records.
+              <p className="mt-4 max-w-2xl text-sm font-medium leading-7 text-slate-300 sm:text-base">
+                Confirm a digital prescription instantly using its verification
+                token. MediLink shows only safe summary details while protecting
+                confidential patient records.
               </p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <HeroPill icon={<CheckCircle2 size={15} />} text="Token based" />
+                <HeroPill icon={<LockKeyhole size={15} />} text="Privacy safe" />
+                <HeroPill icon={<Sparkles size={15} />} text="Instant result" />
+              </div>
             </div>
 
-            <div className="rounded-3xl bg-white/10 p-5">
-              <p className="text-sm font-semibold text-slate-300">Verification privacy</p>
-              <div className="mt-4 flex items-center gap-3">
-                <LockKeyhole className="h-8 w-8 text-teal-300" />
-                <div>
-                  <p className="text-2xl font-black">Limited Public Data</p>
-                  <p className="text-sm text-slate-300">Private health records remain hidden</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-5 backdrop-blur">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+                  Verification privacy
+                </p>
+
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300">
+                    <LockKeyhole className="h-6 w-6" />
+                  </div>
+
+                  <div>
+                    <p className="text-xl font-black text-white">
+                      Limited public data
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-300">
+                      Private health records remain hidden.
+                    </p>
+                  </div>
                 </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-emerald-300/20 bg-emerald-400/10 p-5 backdrop-blur">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">
+                  Trusted access
+                </p>
+
+                <p className="mt-3 text-2xl font-black text-white">
+                  Fast, secure, verified.
+                </p>
+
+                <p className="mt-2 text-sm font-medium leading-6 text-emerald-100">
+                  Patients, doctors, and pharmacies can confirm authenticity
+                  without exposing full medical history.
+                </p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-              <Search className="h-7 w-7" />
+        <div className="mt-6 grid gap-6 lg:grid-cols-[0.78fr_1.22fr]">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-emerald-100 to-cyan-100 text-emerald-700">
+              <Search className="h-6 w-6" />
             </div>
 
-            <h3 className="mt-5 text-2xl font-black text-slate-950">
-              Enter verification token
-            </h3>
+            <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950">
+              Enter token
+            </h2>
 
-            <p className="mt-2 leading-7 text-slate-600">
-              Use the token printed on the digital prescription sheet.
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+              Use the token printed on the digital prescription sheet to verify
+              authenticity.
             </p>
 
-            <label className="mt-6 block">
-              <span className="text-sm font-bold text-slate-700">Prescription Token</span>
+            <label className="mt-5 block">
+              <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                Prescription Token
+              </span>
+
               <input
                 value={token}
                 onChange={(event) => setToken(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-4 font-bold tracking-wide outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black tracking-wide text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
                 placeholder="RX-ML-2026-0924"
               />
             </label>
 
             <button
+              type="button"
               onClick={handleVerify}
-              className="mt-5 w-full rounded-2xl bg-teal-600 px-5 py-4 font-black text-white hover:bg-teal-700"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition hover:from-emerald-700 hover:to-cyan-700"
             >
+              <ShieldCheck size={17} />
               Verify Prescription
             </button>
 
-            <div className="mt-6 rounded-3xl bg-slate-50 p-5">
-              <p className="text-sm font-bold text-slate-500">Demo Token</p>
-              <p className="mt-2 text-xl font-black text-slate-950">RX-ML-2026-0924</p>
+            <div className="mt-5 rounded-[1.5rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 to-cyan-50 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                Demo token
+              </p>
+              <p className="mt-2 font-mono text-lg font-black text-slate-950">
+                RX-ML-2026-0924
+              </p>
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-            {showResult ? (
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            {isValid && (
               <div>
-                <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700">
                       <BadgeCheck className="h-4 w-4" />
                       Prescription Valid
                     </div>
 
-                    <h3 className="mt-5 text-3xl font-black text-slate-950">
-                      Digital Prescription Preview
+                    <h3 className="mt-4 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                      Verified prescription summary
                     </h3>
 
-                    <p className="mt-2 text-slate-600">
-                      Verified summary for token{" "}
-                      <span className="font-black text-slate-950">{prescription.token}</span>
+                    <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+                      Token{" "}
+                      <span className="font-mono font-black text-slate-950">
+                        {prescription.token}
+                      </span>{" "}
+                      matches an authentic MediLink prescription.
                     </p>
                   </div>
 
-                  <div className="grid h-28 w-28 place-items-center rounded-3xl border border-slate-200 bg-slate-50">
+                  <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl border border-slate-200 bg-slate-50">
                     <div className="grid grid-cols-4 gap-1">
                       {Array.from({ length: 16 }).map((_, index) => (
                         <div
                           key={index}
-                          className={`h-3 w-3 rounded-sm ${
+                          className={`h-2.5 w-2.5 rounded-sm ${
                             index % 2 === 0 || index === 5 || index === 11
                               ? "bg-slate-950"
                               : "bg-slate-300"
@@ -156,53 +225,46 @@ function PrescriptionVerify() {
                 </div>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-3xl bg-slate-50 p-5">
-                    <div className="flex items-center gap-3">
-                      <UserRound className="h-5 w-5 text-teal-700" />
-                      <p className="text-sm font-bold text-slate-500">Patient</p>
-                    </div>
-                    <p className="mt-3 text-xl font-black text-slate-950">
-                      {prescription.patient}
-                    </p>
-                  </div>
+                  <SummaryCard
+                    icon={<UserRound size={18} />}
+                    label="Patient"
+                    value={prescription.patient}
+                    tone="emerald"
+                  />
 
-                  <div className="rounded-3xl bg-slate-50 p-5">
-                    <div className="flex items-center gap-3">
-                      <Stethoscope className="h-5 w-5 text-teal-700" />
-                      <p className="text-sm font-bold text-slate-500">Doctor</p>
-                    </div>
-                    <p className="mt-3 text-xl font-black text-slate-950">
-                      {prescription.doctor}
-                    </p>
-                  </div>
+                  <SummaryCard
+                    icon={<Stethoscope size={18} />}
+                    label="Doctor"
+                    value={prescription.doctor}
+                    tone="cyan"
+                  />
 
-                  <div className="rounded-3xl bg-slate-50 p-5">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-teal-700" />
-                      <p className="text-sm font-bold text-slate-500">Department</p>
-                    </div>
-                    <p className="mt-3 text-xl font-black text-slate-950">
-                      {prescription.department}
-                    </p>
-                  </div>
+                  <SummaryCard
+                    icon={<FileText size={18} />}
+                    label="Department"
+                    value={prescription.department}
+                    tone="violet"
+                  />
 
-                  <div className="rounded-3xl bg-slate-50 p-5">
-                    <div className="flex items-center gap-3">
-                      <CalendarDays className="h-5 w-5 text-teal-700" />
-                      <p className="text-sm font-bold text-slate-500">Issue Date</p>
-                    </div>
-                    <p className="mt-3 text-xl font-black text-slate-950">
-                      {prescription.issueDate}
-                    </p>
-                  </div>
+                  <SummaryCard
+                    icon={<CalendarDays size={18} />}
+                    label="Issue date"
+                    value={prescription.issueDate}
+                    tone="amber"
+                  />
                 </div>
 
-                <div className="mt-6 rounded-3xl border border-teal-200 bg-teal-50 p-5">
+                <div className="mt-6 rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-4">
                   <div className="flex items-center gap-3">
-                    <CheckCircle2 className="h-6 w-6 text-teal-700" />
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-emerald-700 shadow-sm">
+                      <CheckCircle2 className="h-5 w-5" />
+                    </div>
+
                     <div>
-                      <p className="text-sm font-bold text-teal-700">Verification Status</p>
-                      <p className="mt-1 text-2xl font-black text-slate-950">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                        Verification status
+                      </p>
+                      <p className="mt-1 text-lg font-black text-slate-950">
                         Authentic MediLink Prescription
                       </p>
                     </div>
@@ -211,9 +273,11 @@ function PrescriptionVerify() {
 
                 <div className="mt-6">
                   <div className="flex items-center gap-2">
-                    <Pill className="h-5 w-5 text-teal-700" />
-                    <h4 className="text-xl font-black text-slate-950">
-                      Prescription Medicine Summary
+                    <div className="grid h-9 w-9 place-items-center rounded-xl bg-cyan-50 text-cyan-700">
+                      <Pill className="h-5 w-5" />
+                    </div>
+                    <h4 className="text-lg font-black text-slate-950">
+                      Medicine summary
                     </h4>
                   </div>
 
@@ -221,19 +285,19 @@ function PrescriptionVerify() {
                     {prescription.medicines.map((medicine) => (
                       <div
                         key={medicine.name}
-                        className="rounded-3xl border border-slate-200 bg-white p-5"
+                        className="rounded-[1.35rem] border border-slate-200 bg-slate-50 p-4"
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                           <div>
-                            <p className="text-lg font-black text-slate-950">
+                            <p className="text-base font-black text-slate-950">
                               {medicine.name}
                             </p>
-                            <p className="mt-1 text-sm text-slate-600">
-                              {medicine.dosage} • {medicine.schedule}
+                            <p className="mt-1 text-sm font-medium text-slate-600">
+                              {medicine.dosage} · {medicine.schedule}
                             </p>
                           </div>
 
-                          <span className="rounded-full bg-teal-50 px-4 py-2 text-sm font-black text-teal-700">
+                          <span className="w-fit rounded-full bg-white px-4 py-2 text-xs font-black text-emerald-700 shadow-sm">
                             {medicine.duration}
                           </span>
                         </div>
@@ -242,15 +306,45 @@ function PrescriptionVerify() {
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-3xl bg-slate-50 p-5">
-                  <p className="text-sm font-bold text-slate-500">Doctor Advice</p>
-                  <p className="mt-2 leading-7 text-slate-700">{prescription.advice}</p>
+                <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                    Doctor advice
+                  </p>
+                  <p className="mt-2 text-sm font-medium leading-7 text-slate-700">
+                    {prescription.advice}
+                  </p>
                 </div>
               </div>
-            ) : (
-              <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-                <h3 className="text-2xl font-black text-slate-950">No token entered</h3>
-                <p className="mt-2 text-slate-600">
+            )}
+
+            {isInvalid && (
+              <div className="rounded-[1.5rem] border border-red-200 bg-red-50 p-8 text-center">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white text-red-600 shadow-sm">
+                  <XCircle size={28} />
+                </div>
+
+                <h3 className="mt-4 text-2xl font-black text-slate-950">
+                  Invalid prescription token
+                </h3>
+
+                <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-6 text-slate-600">
+                  We could not verify this token. Please check the token again
+                  or contact the issuing doctor/support team.
+                </p>
+              </div>
+            )}
+
+            {isEmpty && (
+              <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                  <Search size={26} />
+                </div>
+
+                <h3 className="mt-4 text-2xl font-black text-slate-950">
+                  No token entered
+                </h3>
+
+                <p className="mt-2 text-sm font-medium text-slate-600">
                   Enter a prescription token to view verification result.
                 </p>
               </div>
@@ -259,6 +353,42 @@ function PrescriptionVerify() {
         </div>
       </div>
     </section>
+  );
+}
+
+function HeroPill({ icon, text }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] px-3 py-2 text-xs font-black text-slate-200">
+      <span className="text-emerald-300">{icon}</span>
+      {text}
+    </span>
+  );
+}
+
+function SummaryCard({ icon, label, value, tone = "emerald" }) {
+  const tones = {
+    emerald: "from-emerald-50 to-teal-50 text-emerald-700",
+    cyan: "from-cyan-50 to-sky-50 text-cyan-700",
+    violet: "from-violet-50 to-fuchsia-50 text-violet-700",
+    amber: "from-amber-50 to-orange-50 text-amber-700",
+  };
+
+  return (
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <div
+        className={`mb-3 grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br ${
+          tones[tone] || tones.emerald
+        }`}
+      >
+        {icon}
+      </div>
+
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-2 text-base font-black text-slate-950">{value}</p>
+    </div>
   );
 }
 
