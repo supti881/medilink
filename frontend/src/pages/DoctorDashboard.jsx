@@ -449,7 +449,14 @@ function buildProfileForm(profile, currentUser) {
     experienceYears: profile?.experienceYears ?? "",
     consultationFee: profile?.consultationFee ?? "",
     phone: profile?.phone || currentUser?.phone || "",
-    imageUrl: profile?.imageUrl || "",
+    imageUrl:
+  profile?.imageUrl ||
+  profile?.profileImage ||
+  profile?.user?.imageUrl ||
+  profile?.user?.profileImage ||
+  currentUser?.imageUrl ||
+  currentUser?.profileImage ||
+  "",
     bio: profile?.bio || "",
     availableSlotsText: slotsToText(profile?.availableSlots || []),
   };
@@ -514,6 +521,7 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [profileEditing, setProfileEditing] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [payoutSubmitting, setPayoutSubmitting] = useState(false);
@@ -802,6 +810,7 @@ export default function DoctorDashboard() {
       setDoctorProfile(response.doctor || null);
       setProfileForm(buildProfileForm(response.doctor || null, user));
       setSuccess("Doctor profile updated successfully.");
+      setProfileEditing(false);
 
       await fetchDashboardData(true);
     } catch (err) {
@@ -1097,16 +1106,30 @@ export default function DoctorDashboard() {
         />
       )}
 
-      {activeView === "profile" && (
-        <ProfileEditLayout
-          profileForm={profileForm}
-          profileSaving={profileSaving}
-          photoUploading={photoUploading}
-          onChange={handleProfileChange}
-          onSubmit={handleProfileSubmit}
-          onPhotoUpload={handleDoctorPhotoUpload}
-        />
-      )}
+  {activeView === "profile" && (
+    <DoctorProfileLayout
+    user={user}
+    doctorProfile={doctorProfile}
+    profileForm={profileForm}
+    profileEditing={profileEditing}
+    profileSaving={profileSaving}
+    photoUploading={photoUploading}
+    onStartEdit={() => {
+      setError("");
+      setSuccess("");
+      setProfileEditing(true);
+    }}
+    onCancelEdit={() => {
+      setProfileForm(buildProfileForm(doctorProfile, user));
+      setProfileEditing(false);
+      setError("");
+      setSuccess("");
+    }}
+    onChange={handleProfileChange}
+    onSubmit={handleProfileSubmit}
+    onPhotoUpload={handleDoctorPhotoUpload}
+  />
+)}
 
       {activeView === "appointments" && (
         <AppointmentsLayout
@@ -1198,14 +1221,16 @@ function ImageWithFallback({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
 
+  const safeImageUrl = getBackendFileUrl(imageUrl);
+
   useEffect(() => {
     setImageFailed(false);
-  }, [imageUrl]);
+  }, [safeImageUrl]);
 
-  if (imageUrl && !imageFailed) {
+  if (safeImageUrl && !imageFailed) {
     return (
       <img
-        src={imageUrl}
+        src={safeImageUrl}
         alt={alt}
         onError={() => setImageFailed(true)}
         className={imageClassName}
@@ -1486,6 +1511,188 @@ function OverviewLayout({
     </section>
   );
 }
+function DoctorProfileLayout({
+  user,
+  doctorProfile,
+  profileForm,
+  profileEditing,
+  profileSaving,
+  photoUploading,
+  onStartEdit,
+  onCancelEdit,
+  onChange,
+  onSubmit,
+  onPhotoUpload,
+}) {
+  if (profileEditing) {
+    return (
+      <ProfileEditLayout
+        profileForm={profileForm}
+        profileSaving={profileSaving}
+        photoUploading={photoUploading}
+        onChange={onChange}
+        onSubmit={onSubmit}
+        onPhotoUpload={onPhotoUpload}
+        onCancelEdit={onCancelEdit}
+      />
+    );
+  }
+ const profilePhotoUrl = getBackendFileUrl(
+  profileForm.imageUrl ||
+    profileForm.profileImage ||
+    doctorProfile?.imageUrl ||
+    doctorProfile?.profileImage ||
+    doctorProfile?.user?.imageUrl ||
+    doctorProfile?.user?.profileImage ||
+    user?.imageUrl ||
+    user?.profileImage ||
+    ""
+);
+  const slotLines = String(profileForm.availableSlotsText || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (
+    <section id="profile" className="scroll-mt-6 space-y-6">
+      <Panel
+        title="Doctor Profile"
+        subtitle="Professional profile information visible to patients and used for appointment booking"
+        icon={<UserRoundCog size={20} />}
+      >
+        <div className="overflow-hidden rounded-[32px] border border-cyan-100 bg-gradient-to-br from-cyan-50 via-white to-emerald-50 p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <ImageWithFallback
+                imageUrl={profileForm.imageUrl || doctorProfile?.imageUrl}
+                alt={formatDoctorName(profileForm.fullName || "Doctor")}
+                initial={getDoctorInitial(profileForm.fullName)}
+                imageClassName="h-28 w-28 rounded-[28px] border border-white object-cover shadow-lg ring-4 ring-white"
+                fallbackClassName="grid h-28 w-28 place-items-center rounded-[28px] border border-dashed border-cyan-300 bg-white text-4xl font-black text-cyan-500 shadow-lg ring-4 ring-white"
+              />
+
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-700">
+                  Doctor · Live Profile
+                </p>
+
+                <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+                  {formatDoctorName(profileForm.fullName || user?.name)}
+                </h2>
+
+                <p className="mt-2 text-sm font-black text-cyan-700">
+                  {profileForm.specialization || "Specialization not added"}
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-slate-600">
+                  {profileForm.department || "Department not added"} ·{" "}
+                  {profileForm.qualification || "Qualification not added"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onStartEdit}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/10 transition hover:bg-cyan-700"
+            >
+              <UserRoundCog size={17} />
+              Edit Profile
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-4">
+          <InfoBlock
+            label="Consultation Fee"
+            value={
+              profileForm.consultationFee
+                ? formatCurrency(profileForm.consultationFee)
+                : "Not set"
+            }
+          />
+
+          <InfoBlock
+            label="Experience"
+            value={
+              profileForm.experienceYears
+                ? `${profileForm.experienceYears} years`
+                : "Not set"
+            }
+          />
+
+          <InfoBlock
+            label="Phone"
+            value={profileForm.phone || "Not set"}
+          />
+
+          <InfoBlock
+            label="Profile Status"
+            value={doctorProfile?.status || "active"}
+          />
+        </div>
+
+        <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-100 text-cyan-700">
+                <Stethoscope size={20} />
+              </div>
+
+              <div>
+                <h3 className="font-black text-slate-950">
+                  Professional Bio
+                </h3>
+                <p className="text-sm font-semibold text-slate-500">
+                  Public profile description
+                </p>
+              </div>
+            </div>
+
+            <p className="whitespace-pre-line text-sm font-semibold leading-7 text-slate-700">
+              {profileForm.bio ||
+                "No professional bio added yet. Click Edit Profile to add your medical background and patient-facing profile summary."}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <CalendarDays size={20} />
+              </div>
+
+              <div>
+                <h3 className="font-black text-slate-950">
+                  Available Slots
+                </h3>
+                <p className="text-sm font-semibold text-slate-500">
+                  Booking schedule with capacity
+                </p>
+              </div>
+            </div>
+
+            {slotLines.length === 0 ? (
+              <p className="text-sm font-semibold text-slate-500">
+                No appointment slot added yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {slotLines.map((slot) => (
+                  <div
+                    key={slot}
+                    className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm font-black text-slate-800"
+                  >
+                    {slot}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Panel>
+    </section>
+  );
+}
 function ProfileEditLayout({
   profileForm,
   profileSaving,
@@ -1493,6 +1700,7 @@ function ProfileEditLayout({
   onChange,
   onSubmit,
   onPhotoUpload,
+  onCancelEdit,
 }) {
   const profileInitial = getDoctorInitial(profileForm.fullName);
 
@@ -1645,18 +1853,29 @@ function ProfileEditLayout({
             </p>
           </div>
 
-          <button
-            type="submit"
-            disabled={profileSaving || photoUploading}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {profileSaving ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <Save size={18} />
-            )}
-            Save Profile
-          </button>
+        <div className="flex flex-wrap gap-3">
+  <button
+    type="submit"
+    disabled={profileSaving || photoUploading}
+    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-black text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {profileSaving ? (
+      <Loader2 size={18} className="animate-spin" />
+    ) : (
+      <Save size={18} />
+    )}
+    Save Profile
+  </button>
+
+  <button
+    type="button"
+    onClick={onCancelEdit}
+    disabled={profileSaving || photoUploading}
+    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    Cancel
+  </button>
+</div>
         </form>
       </Panel>
     </section>
