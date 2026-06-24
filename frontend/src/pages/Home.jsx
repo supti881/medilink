@@ -20,37 +20,37 @@ import ServicesSection from "./homeComponents/ServicesSection";
 
 const services = [
   {
-    icon: <Stethoscope size={24} />,
+    icon: <Stethoscope size={20} />,
     title: "Find Specialist Doctors",
     description:
       "Search doctors by name, department, specialization, consultation fee, and availability.",
   },
   {
-    icon: <CalendarCheck size={24} />,
+    icon: <CalendarCheck size={20} />,
     title: "Appointment Management",
     description:
       "Patients can book appointments while doctors can manage consultation status.",
   },
   {
-    icon: <FileCheck2 size={24} />,
+    icon: <FileCheck2 size={20} />,
     title: "Digital Prescription",
     description:
       "Doctors can create prescriptions with medicines, tests, advice, and follow-up dates.",
   },
   {
-    icon: <ShieldCheck size={24} />,
+    icon: <ShieldCheck size={20} />,
     title: "Prescription Verification",
     description:
       "Patients and pharmacies can verify prescriptions using secure RX verification tokens.",
   },
   {
-    icon: <Headphones size={24} />,
+    icon: <Headphones size={20} />,
     title: "Support Ticket",
     description:
       "Patients can create support tickets and track status updates from the admin panel.",
   },
   {
-    icon: <BadgeCheck size={24} />,
+    icon: <BadgeCheck size={20} />,
     title: "Reissue Request",
     description:
       "Patients can request duplicate or corrected prescription copies with admin review.",
@@ -61,23 +61,20 @@ const portals = [
   {
     title: "Patient Portal",
     text: "Register, verify OTP, search doctors, view prescriptions, submit support tickets, and request prescription copies.",
-    icon: <UsersRound size={26} />,
+    icon: <UsersRound size={20} />,
     link: "/patient-dashboard",
-    accent: "from-emerald-500 to-teal-400"
   },
   {
     title: "Doctor Portal",
     text: "View assigned appointments, update consultation status, and create digital prescriptions.",
-    icon: <Stethoscope size={26} />,
+    icon: <Stethoscope size={20} />,
     link: "/doctor-dashboard",
-    accent: "from-teal-500 to-cyan-400"
   },
   {
     title: "Admin Portal",
     text: "Monitor doctors, review support tickets, and approve or reject prescription replacement requests.",
-    icon: <ShieldCheck size={26} />,
+    icon: <ShieldCheck size={20} />,
     link: "/admin-dashboard",
-    accent: "from-cyan-500 to-emerald-400"
   },
 ];
 
@@ -90,12 +87,12 @@ const processSteps = [
   {
     number: "02",
     title: "Find Doctor",
-    text: "Patient searches specialist doctors and checks live details.",
+    text: "Patient searches specialist doctors and checks availability.",
   },
   {
     number: "03",
     title: "Consultation",
-    text: "Doctor manages appointment status and configuration notes.",
+    text: "Doctor manages appointment status and patient notes.",
   },
   {
     number: "04",
@@ -106,127 +103,127 @@ const processSteps = [
 
 function Home() {
   return (
-    <main className="overflow-hidden bg-[#fafdfb] text-slate-900 selection:bg-emerald-500 selection:text-white">
-      
-      {/* --- HERO SECTION --- */}
+    <main className="overflow-hidden bg-[#f5f7fb] text-slate-950 selection:bg-emerald-500 selection:text-white">
       <HeroSection />
-
       <StatsSection />
-
       <ServicesSection services={services} />
 
-      {/* --- PROCESS/FLOW SECTION --- */}
-      <section className="bg-gradient-to-b from-[#f9fdfa] to-[#f3faf5] py-24">
+      <section className="bg-[#f5f7fb] py-14 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-start">
-            
-            <div className="lg:col-span-4 lg:sticky lg:top-28 space-y-4 text-center lg:text-left">
-              <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-600">Journey Map</p>
-              <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+          <div className="grid gap-9 lg:grid-cols-12 lg:items-start">
+            <div className="lg:col-span-4 lg:sticky lg:top-28">
+              <p className="text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-emerald-600">
+                Journey Map
+              </p>
+              <h2 className="mt-3 text-[1.55rem] font-extrabold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.85rem]">
                 A clean patient to prescription journey.
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
-                Engineered with explicit operational sequence layout logic, reducing process clutter while ensuring rigid verification checkpoints.
+              <p className="mt-3 text-sm font-medium leading-6 text-slate-600">
+                The flow is simple for presentation: account creation,
+                doctor search, consultation, and prescription verification.
               </p>
             </div>
 
-            <div className="lg:col-span-8 grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:col-span-8">
               {processSteps.map((step) => (
-                <div
+                <article
                   key={step.number}
-                  className="group relative rounded-3xl border border-slate-100 bg-white p-6 shadow-sm transition-all duration-300 hover:shadow-md hover:border-emerald-200"
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_16px_36px_rgba(15,23,42,0.07)]"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-4xl font-black text-slate-100 group-hover:text-emerald-100 transition-colors duration-300">
+                    <span className="text-2xl font-bold leading-none tracking-tight text-slate-200">
                       {step.number}
                     </span>
-                    <HeartPulse size={16} className="text-slate-300 group-hover:text-emerald-500 group-hover:animate-pulse transition-colors" />
+                    <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
+                      <HeartPulse size={16} />
+                    </span>
                   </div>
-                  <h3 className="mt-4 text-lg font-bold text-slate-900">
+
+                  <h3 className="mt-4 text-[0.95rem] font-bold tracking-[-0.01em] text-slate-950">
                     {step.title}
                   </h3>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-500 font-medium">
+                  <p className="mt-2 text-[0.78rem] font-medium leading-6 text-slate-600">
                     {step.text}
                   </p>
-                </div>
+                </article>
               ))}
             </div>
-
           </div>
         </div>
       </section>
 
-      {/* --- PORTALS & ARCHITECTURE SECTION --- */}
-      <section id="about" className="scroll-mt-20 bg-slate-950 py-24 text-white relative overflow-hidden">
-        {/* Subtle grid layer for dark section */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(circle_at_center,white,transparent_80%)] opacity-20" />
+      <section
+        id="about"
+        className="relative scroll-mt-24 overflow-hidden bg-[#07111f] py-14 text-white sm:py-16"
+      >
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.07)_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-35" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(19,200,180,0.12),transparent_34%),radial-gradient(circle_at_80%_80%,rgba(16,185,129,0.10),transparent_34%)]" />
 
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid gap-12 lg:grid-cols-12 lg:items-center">
-            
-            <div className="lg:col-span-5 space-y-6 text-center lg:text-left">
-              <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400">Gateway Framework</p>
-              <h2 className="text-3xl font-black tracking-tight sm:text-5xl leading-tight">
-                Three portals.<br />One connected system.
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
+            <div className="lg:col-span-5">
+              <p className="text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-teal-300">
+                Gateway Framework
+              </p>
+              <h2 className="mt-3 text-[1.55rem] font-extrabold leading-tight tracking-[-0.025em] sm:text-[1.85rem]">
+                Three portals. One connected system.
               </h2>
-              <p className="text-sm text-slate-400 max-w-xl mx-auto lg:mx-0 font-medium">
-                MediLink enforces structural integrity using isolated views across explicit system instances managed seamlessly through dynamic routing setups.
+              <p className="mt-4 max-w-xl text-sm font-medium leading-6 text-slate-300">
+                MediLink keeps each user role separated while sharing one clear
+                backend API and database structure.
               </p>
 
-              <div className="space-y-3 pt-2">
-                <AboutCheck text="Secure JWT state processing architecture & database abstraction" />
-                <AboutCheck text="Unified synchronous API mapping operations" />
+              <div className="mt-6 grid gap-3">
+                <AboutCheck text="Secure JWT authentication and role-based routing" />
+                <AboutCheck text="Connected API mapping for patient, doctor, and admin flows" />
               </div>
             </div>
 
-            <div className="lg:col-span-7 grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-3 lg:col-span-7">
               {portals.map((portal) => (
                 <Link
                   key={portal.title}
                   to={portal.link}
-                  className="group relative flex flex-col justify-between rounded-3xl border border-slate-800 bg-slate-900/60 p-6 transition-all duration-300 hover:-translate-y-2 hover:bg-slate-900 hover:border-slate-700"
+                  className="group flex min-h-[200px] flex-col justify-between rounded-2xl border border-white/10 bg-white/[0.05] p-4 shadow-[0_18px_45px_rgba(2,6,23,0.20)] transition hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-white/[0.08]"
                 >
                   <div>
-                    <div className={`mb-6 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${portal.accent} text-slate-950 shadow-md`}>
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#13c8b4] text-slate-950 shadow-[0_12px_26px_rgba(19,200,180,0.16)]">
                       {portal.icon}
-                    </div>
-                    <h3 className="text-lg font-bold tracking-tight text-white group-hover:text-emerald-400 transition-colors">
+                    </span>
+                    <h3 className="mt-4 text-[0.95rem] font-bold tracking-[-0.01em] text-white">
                       {portal.title}
                     </h3>
-                    <p className="mt-3 text-xs leading-relaxed text-slate-400 font-medium">
+                    <p className="mt-2 text-[0.78rem] font-medium leading-6 text-slate-300">
                       {portal.text}
                     </p>
                   </div>
 
-                  <div className="mt-6 flex items-center gap-2 text-xs font-bold text-slate-200 group-hover:text-white">
-                    <span>Enter Gateway</span>
-                    <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-1" />
+                  <div className="mt-5 inline-flex items-center gap-2 text-[0.8rem] font-bold text-teal-200">
+                    Enter Gateway
+                    <ArrowRight size={14} className="transition group-hover:translate-x-1" />
                   </div>
                 </Link>
               ))}
             </div>
-
           </div>
 
-          {/* Infrastructure Cards Bottom Grid */}
-          <div className="mt-16 grid gap-4 rounded-3xl border border-slate-800 bg-slate-900/30 p-4 sm:grid-cols-3 backdrop-blur-sm">
+          <div className="mt-8 grid gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-inner backdrop-blur sm:grid-cols-3">
             <SystemCard
-              icon={<Activity size={20} />}
-              title="Stateful Express Engine"
-              text="Asynchronous REST architecture matching schema topologies with structural endpoints."
+              icon={<Activity size={17} />}
+              title="Express API Engine"
+              text="Structured REST endpoints connect auth, appointments, prescriptions, payments, and support modules."
             />
             <SystemCard
-              icon={<LockKeyhole size={20} />}
-              title="Granular Token Security"
-              text="Automated payload extraction confirming authorization state handling constraints."
+              icon={<LockKeyhole size={17} />}
+              title="Token Security"
+              text="Authentication state and role checks protect dashboard-specific data and actions."
             />
             <SystemCard
-              icon={<Clock3 size={20} />}
-              title="Live Compilation Layout"
-              text="Pre-tested modular logic loops guaranteeing immediate demonstration readiness."
+              icon={<Clock3 size={17} />}
+              title="Demo Ready Flow"
+              text="Every main workflow can be shown clearly during a university project presentation."
             />
           </div>
-
         </div>
       </section>
     </main>
@@ -235,22 +232,24 @@ function Home() {
 
 function AboutCheck({ text }) {
   return (
-    <div className="flex items-start gap-3 rounded-2xl bg-slate-900/80 border border-slate-800/60 p-3 shadow-inner">
-      <CheckCircle2 className="shrink-0 text-emerald-400 mt-0.5" size={16} />
-      <p className="text-xs font-medium text-slate-300 leading-normal">{text}</p>
+    <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.05] p-3.5">
+      <CheckCircle2 className="mt-0.5 shrink-0 text-teal-300" size={16} />
+      <p className="text-[0.78rem] font-medium leading-6 text-slate-300">{text}</p>
     </div>
   );
 }
 
 function SystemCard({ icon, title, text }) {
   return (
-    <div className="rounded-2xl bg-slate-950/40 p-5 border border-transparent hover:border-slate-800/80 transition-all duration-300">
-      <div className="mb-3 flex items-center gap-2 text-emerald-400">
-        <span className="p-1 rounded-lg bg-slate-900">{icon}</span>
+    <article className="rounded-2xl border border-white/10 bg-[#07111f]/70 p-4">
+      <div className="flex items-center gap-3 text-teal-300">
+        <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-400/10">
+          {icon}
+        </span>
         <h3 className="text-sm font-bold text-white">{title}</h3>
       </div>
-      <p className="text-xs leading-relaxed text-slate-400 font-medium">{text}</p>
-    </div>
+      <p className="mt-3 text-[0.78rem] font-medium leading-6 text-slate-400">{text}</p>
+    </article>
   );
 }
 

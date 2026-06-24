@@ -3,16 +3,20 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
-  color: #0f172a;
-  background: #f8fafc;
+  color: #111827;
+  background: #f5f7fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --medilink-navy: #020617;
-  --medilink-cyan: #06b6d4;
-  --medilink-teal: #14b8a6;
-  --medilink-emerald: #10b981;
+
+  --medilink-ink: #111827;
+  --medilink-muted: #667085;
+  --medilink-border: #d9e1ec;
+  --medilink-panel: #ffffff;
+  --medilink-green: #0f9f73;
+  --medilink-teal: #13c8b4;
+  --medilink-dark: #061817;
 }
 
 * {
@@ -27,12 +31,10 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(6, 182, 212, 0.14), transparent 30%),
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.12), transparent 28%),
-    #f8fafc;
+  background: #f5f7fb;
 }
 
+body,
 button,
 input,
 select,
@@ -44,56 +46,44 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+}
+
 a {
   color: inherit;
   text-decoration: none;
 }
 
 ::selection {
-  background: rgba(6, 182, 212, 0.22);
+  background: rgba(19, 200, 180, 0.22);
 }
 
-.medilink-glass {
-  border: 1px solid rgba(226, 232, 240, 0.85);
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(18px);
+.medilink-container {
+  width: min(100% - 2rem, 1180px);
+  margin-inline: auto;
 }
 
-.medilink-dark-card {
-  background:
-    radial-gradient(circle at top right, rgba(6, 182, 212, 0.32), transparent 28%),
-    linear-gradient(135deg, #020617 0%, #071827 55%, #042f2e 100%);
+.medilink-card {
+  border: 1px solid rgba(217, 225, 236, 0.95);
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.045);
 }
 
-.medilink-gradient-text {
-  background: linear-gradient(135deg, #0891b2, #059669);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.medilink-eyebrow {
+  font-size: 0.68rem;
+  line-height: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #0f9f73;
 }
 
-.medilink-soft-grid {
-  background-image:
-    linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
-  background-size: 34px 34px;
-}
-
-@keyframes medilinkFloat {
-  0% {
-    transform: translateY(0px);
+@keyframes subtleZoom {
+  from {
+    transform: scale(1);
   }
-
-  50% {
-    transform: translateY(-16px);
+  to {
+    transform: scale(1.045);
   }
-
-  100% {
-    transform: translateY(0px);
-  }
-}
-
-.medilink-float {
-  animation: medilinkFloat 5.5s ease-in-out infinite;
 }

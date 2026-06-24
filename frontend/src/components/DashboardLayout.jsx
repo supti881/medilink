@@ -272,34 +272,27 @@ function Sidebar({
   };
 
   return (
-    <div
-      className={cx(
-        "relative flex h-full flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#09111e] text-white shadow-2xl",
-        theme.glow
-      )}
-    >
-      <div className="pointer-events-none absolute -top-12 left-1/4 right-1/4 h-16 w-1/2 bg-gradient-to-r from-teal-500/20 to-emerald-500/20 blur-xl" />
-
-      <div className="border-b border-white/[0.06] p-5">
+    <div className="flex h-full flex-col overflow-hidden bg-gradient-to-b from-[#07111f] via-[#081320] to-[#07111f] text-white shadow-[10px_0_34px_rgba(2,6,23,0.12)]">
+      <div className="border-b border-white/[0.07] px-5 py-5">
         <div className="flex items-center justify-between gap-2">
           <Link to="/" className="group flex items-center gap-3" onClick={onClose}>
             <div
               className={cx(
-                "grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br text-slate-950 shadow-md transition-transform duration-300 group-hover:scale-105 group-hover:rotate-6",
+                "grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br text-slate-950 shadow-sm transition-transform duration-300 group-hover:scale-105",
                 theme.accent
               )}
             >
-              <Stethoscope size={18} strokeWidth={2.5} />
+              <Stethoscope size={17} strokeWidth={2.5} />
             </div>
 
-            <div>
-              <p className="text-base font-black tracking-tight text-white">
+            <div className="min-w-0">
+              <p className="truncate text-[1rem] font-bold tracking-[-0.02em] text-white">
                 Medi
-                <span className="font-serif font-normal italic text-teal-400">
+                <span className="font-serif font-semibold italic text-teal-300">
                   Link
                 </span>
               </p>
-              <p className="max-w-[150px] truncate text-[11px] font-semibold tracking-wide text-slate-400">
+              <p className="mt-0.5 truncate text-[0.72rem] font-medium text-slate-400">
                 {profileLabel}
               </p>
             </div>
@@ -315,65 +308,9 @@ function Sidebar({
             </button>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={goToProfile}
-          disabled={!canEditProfile}
-          title={canEditProfile ? "Click to edit profile" : undefined}
-          className={cx(
-            "mt-5 w-full rounded-2xl border border-white/[0.05] bg-white/[0.02] p-3.5 text-left backdrop-blur-sm transition",
-            canEditProfile
-              ? `cursor-pointer hover:shadow-lg ${theme.profileHover}`
-              : "cursor-default"
-          )}
-        >
-          <div className="flex items-center gap-3">
-            {profileImage ? (
-              <img
-                src={profileImage}
-                alt={sidebarUser?.name || "Profile"}
-                className="h-10 w-10 shrink-0 rounded-xl border border-white/10 object-cover shadow-inner"
-              />
-            ) : (
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-sm font-bold text-white shadow-inner">
-                {getFirstLetter(sidebarUser?.name)}
-              </div>
-            )}
-
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <p className="truncate text-xs font-black text-white">
-                {getProfileDisplayName(role, sidebarUser)}
-              </p>
-              <p className="mt-0.5 truncate text-[11px] font-medium text-slate-400">
-                {sidebarUser?.email || "No email profile"}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between border-t border-white/[0.04] pt-2.5">
-            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-              Role Access
-            </span>
-            <span
-              className={cx(
-                "inline-flex rounded-md bg-gradient-to-r px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-950 shadow-sm",
-                theme.accent
-              )}
-            >
-              {sidebarUser?.role || role}
-            </span>
-          </div>
-
-          {canEditProfile && (
-            <p className={cx("mt-2 text-[10px] font-bold", theme.profileHint)}>
-              Click this card to edit profile
-            </p>
-          )}
-        </button>
       </div>
 
-      <nav className="medilink-sidebar-scroll custom-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
+      <nav className="medilink-sidebar-scroll custom-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isMenuItemActive(item, location);
@@ -384,17 +321,17 @@ function Sidebar({
               to={item.to}
               onClick={handleMenuClick}
               className={cx(
-                "group relative flex items-center gap-3 overflow-hidden rounded-xl border px-3.5 py-3 text-sm font-bold transition-all",
+                "group relative flex items-center gap-3 overflow-hidden rounded-xl px-3.5 py-3 text-sm font-semibold transition-all",
                 active
-                  ? "border-white/[0.08] bg-white/[0.06] text-white"
-                  : "border-transparent text-slate-400 hover:bg-white/[0.02] hover:text-white"
+                  ? "bg-white/[0.07] text-white shadow-inner"
+                  : "text-slate-400 hover:bg-white/[0.045] hover:text-white"
               )}
             >
               {active && (
                 <motion.div
                   layoutId="activeGlowBar"
                   className={cx(
-                    "absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full bg-gradient-to-b",
+                    "absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-r-full bg-gradient-to-b",
                     theme.accent
                   )}
                   transition={{
@@ -407,31 +344,62 @@ function Sidebar({
 
               <Icon
                 size={17}
-                strokeWidth={active ? 2.5 : 2}
+                strokeWidth={active ? 2.45 : 2}
                 className={cx(
-                  "transition-colors duration-200",
+                  "relative z-10 transition-colors duration-200",
                   active
-                    ? "text-teal-400"
+                    ? "text-teal-300"
                     : "text-slate-500 group-hover:text-slate-300"
                 )}
               />
 
-              <span className="relative z-10">{item.label}</span>
+              <span className="relative z-10 truncate">{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-t border-white/[0.06] bg-slate-950/40 p-4 backdrop-blur-md">
-        <div className="flex items-center justify-between">
-          <p className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            </span>
+      <div className="border-t border-white/[0.07] px-4 py-4">
+        <button
+          type="button"
+          onClick={goToProfile}
+          disabled={!canEditProfile}
+          title={canEditProfile ? "Edit profile" : undefined}
+          className={cx(
+            "flex w-full items-center gap-3 rounded-2xl p-2.5 text-left transition",
+            canEditProfile
+              ? "cursor-pointer hover:bg-white/[0.055]"
+              : "cursor-default"
+          )}
+        >
+          {profileImage ? (
+            <img
+              src={profileImage}
+              alt={sidebarUser?.name || "Profile"}
+              className="h-10 w-10 shrink-0 rounded-xl border border-white/10 object-cover"
+            />
+          ) : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.08] text-sm font-bold text-white ring-1 ring-white/10">
+              {getFirstLetter(sidebarUser?.name)}
+            </div>
+          )}
+
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <p className="truncate text-[0.82rem] font-bold text-white">
+              {getProfileDisplayName(role, sidebarUser)}
+            </p>
+            <p className="mt-0.5 truncate text-[0.72rem] font-medium text-slate-400">
+              {profileLabel || sidebarUser?.role || role}
+            </p>
+          </div>
+        </button>
+
+        <div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-3">
+          <p className="flex items-center gap-2 text-[0.72rem] font-medium text-slate-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
             Core Engine Linked
           </p>
-          <span className="font-mono text-[10px] font-medium text-slate-600">
+          <span className="font-mono text-[0.68rem] font-medium text-slate-600">
             v2.4.0
           </span>
         </div>
