@@ -1,56 +1,51 @@
-import { motion } from "framer-motion";
+import { Activity, BadgeCheck, Clock3, UsersRound } from "lucide-react";
 
 const stats = [
   {
     value: "24/7",
     label: "Healthcare access",
-    accent: "from-emerald-500 to-teal-500",
+    icon: <Clock3 size={17} />,
   },
   {
     value: "3",
     label: "Role-based portals",
-    accent: "from-teal-500 to-cyan-500",
+    icon: <UsersRound size={17} />,
   },
   {
     value: "6+",
     label: "Specialist doctors",
-    accent: "from-cyan-500 to-emerald-500",
+    icon: <Activity size={17} />,
   },
   {
     value: "100%",
     label: "Demo ready",
-    accent: "from-emerald-500 to-cyan-500",
+    icon: <BadgeCheck size={17} />,
   },
 ];
 
 export default function StatsSection() {
   return (
-    <section className="relative border-y border-slate-100 bg-white/80 py-14 backdrop-blur">
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:grid-cols-2 lg:grid-cols-4 sm:px-6 lg:px-8">
-        {stats.map((stat, index) => (
-          <motion.div
+    <section className="relative z-10 bg-[#f5f7fb] py-7">
+      <div className="mx-auto grid max-w-7xl gap-4 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
+        {stats.map((stat) => (
+          <article
             key={stat.label}
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4 }}
-            transition={{
-              delay: index * 0.08,
-              duration: 0.55,
-              ease: [0.16, 1, 0.3, 1],
-            }}
-            whileHover={{ y: -6 }}
-            className="group rounded-3xl border border-slate-100 bg-slate-50/60 p-6 shadow-sm transition hover:border-emerald-100 hover:bg-white hover:shadow-lg hover:shadow-emerald-950/5"
+            className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_10px_24px_rgba(15,23,42,0.045)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(15,23,42,0.07)]"
           >
-            <div
-              className={`mb-4 h-1 w-12 rounded-full bg-gradient-to-r ${stat.accent}`}
-            />
-            <p className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
-              {stat.value}
-            </p>
-            <p className="mt-2 text-sm font-semibold text-slate-500">
-              {stat.label}
-            </p>
-          </motion.div>
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
+                {stat.icon}
+              </span>
+              <div>
+                <p className="text-[1.22rem] font-bold leading-none tracking-[-0.02em] text-slate-950">
+                  {stat.value}
+                </p>
+                <p className="mt-1 text-[0.72rem] font-medium text-slate-500">
+                  {stat.label}
+                </p>
+              </div>
+            </div>
+          </article>
         ))}
       </div>
     </section>

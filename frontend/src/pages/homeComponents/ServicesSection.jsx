@@ -1,112 +1,58 @@
-import { motion } from 'framer-motion';
-
-// Animation orchestrator for staggering the cards
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.12, // Smoother, rapid cascading sequence
-      delayChildren: 0.1,
-    },
-  },
-};
-
-// Clean slide-up variant using a smooth spring
-const cardVariants = {
-  hidden: { 
-    opacity: 0, 
-    y: 40 
-  },
-  visible: { 
-    opacity: 1, 
-    y: 0,
-    transition: { 
-      type: "spring",
-      stiffness: 80,
-      damping: 18
-    }
-  },
-};
-
-// Smooth fade-in down variant for headings
-const headerVariants = {
-  hidden: { opacity: 0, y: -20 },
-  visible: { 
-    opacity: 1, 
-    y: 0,
-    transition: { duration: 0.6, ease: [0.215, 0.610, 0.355, 1.000] }
-  }
-};
+import { ArrowRight } from "lucide-react";
+import { Link } from "react-router";
 
 export default function ServicesSection({ services = [] }) {
-  // Guard check to prevent mapping over undefined data
   if (!services || services.length === 0) return null;
 
   return (
-    <section id="services" className="scroll-mt-20 bg-white border-y border-slate-100 py-24 relative overflow-hidden">
+    <section id="services" className="scroll-mt-24 bg-white py-14 sm:py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        
-        {/* Header Section */}
-        <motion.div 
-          className="mx-auto max-w-3xl text-center space-y-4"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.3 }}
-          variants={headerVariants}
-        >
-          <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-600">
-            Core Architecture
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-emerald-600">
+            Core Features
           </p>
-          <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-5xl">
+          <h2 className="mt-3 text-[1.55rem] font-extrabold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.85rem]">
             One ecosystem. Complete medical workflow.
           </h2>
-          <p className="text-base text-slate-500 max-w-2xl mx-auto font-medium">
-            Every specialized module acts as a critical component built to reflect modern real-world cloud application requirements.
+          <p className="mx-auto mt-3 max-w-xl text-sm font-medium leading-6 text-slate-600">
+            MediLink connects patients, doctors, and admins through focused
+            modules that are easy to explain, test, and present.
           </p>
-        </motion.div>
+        </div>
 
-        {/* Services Grid */}
-        <motion.div 
-          className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-3"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.15 }}
-        >
+        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {services.map((service, index) => (
-            <motion.article
-              key={service.id || service.title || index} // Ensuring a robust fallback key
-              variants={cardVariants}
-              whileHover={{ 
-                y: -8,
-                scale: 1.01,
-                transition: { type: "spring", stiffness: 300, damping: 20 }
-              }}
-              className="group relative overflow-hidden rounded-3xl border border-slate-100 bg-slate-50/50 p-8 transition-colors duration-300 hover:bg-white hover:border-emerald-100 hover:shadow-xl hover:shadow-emerald-950/5"
+            <article
+              key={service.id || service.title || index}
+              className="group flex min-h-[188px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_16px_36px_rgba(15,23,42,0.07)]"
             >
-              {/* Dynamic hover node background light pattern */}
-              <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br from-emerald-200/20 to-teal-200/20 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100 pointer-events-none" />
-              
-              {/* Icon Container */}
-              <div className="mb-6 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-800 shadow-sm border border-slate-100 transition-all duration-300 group-hover:bg-gradient-to-br group-hover:from-emerald-500 group-hover:to-teal-500 group-hover:text-white group-hover:scale-110">
-                {service.icon}
+              <div className="flex items-start justify-between gap-4">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-600 group-hover:text-white">
+                  {service.icon}
+                </span>
+                <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[0.62rem] font-extrabold uppercase tracking-[0.13em] text-slate-500">
+                  Module {String(index + 1).padStart(2, "0")}
+                </span>
               </div>
 
-              <p className="mb-2 text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                Module {String(index + 1).padStart(2, "0")}
-              </p>
-
-              <h3 className="text-xl font-bold tracking-tight text-slate-900 transition-colors group-hover:text-emerald-700">
+              <h3 className="mt-4 text-[0.95rem] font-bold tracking-[-0.01em] text-slate-950">
                 {service.title}
               </h3>
 
-              <p className="mt-3 text-sm leading-relaxed text-slate-500 font-medium">
+              <p className="mt-2 flex-1 text-[0.78rem] font-medium leading-6 text-slate-600">
                 {service.description}
               </p>
-            </motion.article>
+
+              <Link
+                to="/service"
+                className="mt-4 inline-flex items-center gap-2 text-[0.8rem] font-bold text-emerald-700"
+              >
+                View details
+                <ArrowRight size={14} className="transition group-hover:translate-x-1" />
+              </Link>
+            </article>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   );
