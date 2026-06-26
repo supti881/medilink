@@ -15,7 +15,6 @@ import {
   MapPin,
   Phone,
   Save,
-  ShieldCheck,
   Trash2,
   UploadCloud,
   UserRound,
@@ -41,7 +40,6 @@ import {
   medicalRecordApi,
   paymentApi,
   prescriptionApi,
-  replacementRequestApi,
   supportTicketApi,
   uploadApi,
 } from "../services/api";
@@ -632,7 +630,6 @@ function PatientDashboard() {
   const [prescriptions, setPrescriptions] = useState([]);
   const [payments, setPayments] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [replacementRequests, setReplacementRequests] = useState([]);
   const [medicalRecords, setMedicalRecords] = useState([]);
 
   const [profileForm, setProfileForm] = useState(emptyProfileForm);
@@ -660,7 +657,6 @@ function PatientDashboard() {
         "medical-history",
         "ai-assistant",
         "support",
-        "reissue",
         "verify-rx",
       ].includes(hash)
     ) {
@@ -720,7 +716,6 @@ function PatientDashboard() {
           prescriptionsResponse,
           paymentsResponse,
           ticketsResponse,
-          replacementResponse,
           medicalRecordsResponse,
         ] = await Promise.all([
           doctorApi.getAll(),
@@ -728,7 +723,6 @@ function PatientDashboard() {
           prescriptionApi.getMyPrescriptions(),
           paymentApi.getMyPayments(),
           supportTicketApi.getMyTickets(),
-          replacementRequestApi.getMyRequests(),
           medicalRecordApi.getMyRecords(),
         ]);
 
@@ -741,7 +735,6 @@ function PatientDashboard() {
         setPrescriptions(prescriptionsResponse.prescriptions || []);
         setPayments(paymentsResponse.payments || []);
         setTickets(ticketsResponse.tickets || []);
-        setReplacementRequests(replacementResponse.requests || []);
         setMedicalRecords(medicalRecordsResponse.records || []);
         setLastSynced(new Date().toISOString());
       } catch (err) {
@@ -986,7 +979,6 @@ function PatientDashboard() {
             prescriptions={prescriptions}
             payments={payments}
             tickets={tickets}
-            replacementRequests={replacementRequests}
             medicalRecords={medicalRecords}
             pendingAppointments={pendingAppointments}
             paidPayments={paidPayments}
@@ -1053,9 +1045,6 @@ function PatientDashboard() {
 
         {activeLayout === "support" && <SupportLayout tickets={tickets} />}
 
-        {activeLayout === "reissue" && (
-          <ReissueLayout replacementRequests={replacementRequests} />
-        )}
 
         {activeLayout === "verify-rx" && (
           <VerifyPrescriptionLayout prescriptions={prescriptions} />
@@ -1077,7 +1066,6 @@ function OverviewLayout({
   prescriptions,
   payments,
   tickets,
-  replacementRequests,
   medicalRecords,
   pendingAppointments,
   paidPayments,
@@ -1088,7 +1076,7 @@ function OverviewLayout({
 
   return (
     <section id="overview" className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={<CalendarDays size={20} />}
           label="Appointments"
@@ -1126,12 +1114,6 @@ function OverviewLayout({
           tone="rose"
         />
 
-        <StatCard
-          icon={<ShieldCheck size={20} />}
-          label="Reissue requests"
-          value={replacementRequests.length}
-          tone="violet"
-        />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -2448,49 +2430,6 @@ function SupportLayout({ tickets }) {
   );
 }
 
-function ReissueLayout({ replacementRequests }) {
-  return (
-    <section id="reissue" className="scroll-mt-6">
-      <DataPanel
-        title="Replacement / Reissue Requests"
-        subtitle={`${replacementRequests.length} records`}
-      >
-        {replacementRequests.length === 0 ? (
-          <EmptyState text="No replacement request found." />
-        ) : (
-          <div className="space-y-3">
-            {replacementRequests.map((request) => (
-              <RecordCard key={request._id}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-black text-slate-950">
-                      {request.reason ||
-                        request.requestType ||
-                        "Reissue request"}
-                    </p>
-
-                    <p className="mt-1 text-sm font-semibold text-slate-500">
-                      {formatDate(request.createdAt)}
-                    </p>
-                  </div>
-
-                  <StatusBadge status={request.status} />
-                </div>
-
-                {request.description && (
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    {request.description}
-                  </p>
-                )}
-              </RecordCard>
-            ))}
-          </div>
-        )}
-      </DataPanel>
-    </section>
-  );
-}
-
 function VerifyPrescriptionLayout({ prescriptions }) {
   return (
     <section id="verify-rx" className="scroll-mt-6">
@@ -2655,3 +2594,4 @@ function TextAreaField({
 }
 
 export default PatientDashboard;
+

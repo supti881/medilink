@@ -106,7 +106,6 @@ function getNavItems(role) {
         icon: CalendarDays,
       },
       { label: "Support", to: "/admin-dashboard#tickets", icon: Headphones },
-      { label: "Reissues", to: "/admin-dashboard#reissues", icon: FileCheck2 },
     ];
   }
 
@@ -130,7 +129,6 @@ function getNavItems(role) {
 },
 { label: "Payments", to: "/mock-payment", icon: CreditCard },
     { label: "Support", to: "/support-ticket", icon: Headphones },
-    { label: "Reissue", to: "/replacement-request", icon: FileCheck2 },
     { label: "Verify RX", to: "/verify-prescription", icon: ShieldCheck },
   ];
 }

@@ -154,7 +154,7 @@ function Home() {
 
       <section
         id="about"
-        className="relative scroll-mt-24 overflow-hidden bg-[#07111f] py-14 text-white sm:py-16"
+        className="relative scroll-mt-24 overflow-hidden bg-[#061817] py-14 text-white sm:py-16"
       >
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.07)_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-35" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(19,200,180,0.12),transparent_34%),radial-gradient(circle_at_80%_80%,rgba(16,185,129,0.10),transparent_34%)]" />
@@ -241,7 +241,7 @@ function AboutCheck({ text }) {
 
 function SystemCard({ icon, title, text }) {
   return (
-    <article className="rounded-2xl border border-white/10 bg-[#07111f]/70 p-4">
+    <article className="rounded-2xl border border-white/10 bg-[#061817]/70 p-4">
       <div className="flex items-center gap-3 text-teal-300">
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-400/10">
           {icon}
