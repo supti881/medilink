@@ -49,7 +49,6 @@ function Footer() {
               { label: "Patient Portal", path: "/patient-dashboard" },
               { label: "Doctor Portal", path: "/doctor-dashboard" },
               { label: "Admin Portal", path: "/admin-dashboard" },
-              { label: "Replacement", path: "/replacement-request" },
             ]}
           />
 

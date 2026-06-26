@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import {
   CalendarDays,
   Camera,
+  CheckCircle2,
   Droplets,
   Eye,
   EyeOff,
@@ -34,6 +35,20 @@ const initialFormData = {
   emergencyContactPhone: "",
   medicalNotes: "",
 };
+
+const accountTypes = [
+  { value: "patient", label: "Patient" },
+  { value: "doctor", label: "Doctor" },
+];
+
+const genderOptions = [
+  { value: "", label: "Select gender" },
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+];
+
+const bloodGroups = ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
 function Register() {
   const navigate = useNavigate();
@@ -135,10 +150,7 @@ function Register() {
       payload.append("dateOfBirth", formData.dateOfBirth);
       payload.append("bloodGroup", formData.bloodGroup);
       payload.append("address", formData.address.trim());
-      payload.append(
-        "emergencyContactName",
-        formData.emergencyContactName.trim()
-      );
+      payload.append("emergencyContactName", formData.emergencyContactName.trim());
       payload.append(
         "emergencyContactPhone",
         formData.emergencyContactPhone.trim()
@@ -175,8 +187,7 @@ function Register() {
       localStorage.setItem("medilink_pending_email", formData.email.trim());
 
       setSuccess(
-        response.message ||
-          "Account created successfully. Please verify your OTP."
+        response.message || "Account created successfully. Please verify your OTP."
       );
 
       if (response.devOtp) {
@@ -198,520 +209,507 @@ function Register() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f4f7fb] px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mx-auto grid max-w-7xl overflow-hidden rounded-[34px] border border-slate-200 bg-white shadow-[0_28px_80px_-35px_rgba(15,23,42,0.45)] lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="relative overflow-hidden bg-[#02142d] px-6 py-10 text-white sm:px-10 lg:px-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.18),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(34,197,94,0.14),transparent_30%)]" />
-
-          <div className="relative z-10">
-            <Link
-              to="/"
-              className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-black text-cyan-200"
-            >
-              <ShieldCheck size={17} />
-              MediLink Secure Registration
-            </Link>
-
-            <p className="mt-12 text-sm font-black uppercase tracking-[0.35em] text-cyan-300">
-              Create Account
-            </p>
-
-            <h1 className="mt-6 max-w-xl text-4xl font-black leading-tight text-white sm:text-5xl">
-              Start your digital healthcare journey with MediLink.
-            </h1>
-
-            <p className="mt-6 max-w-2xl text-base leading-8 text-slate-200">
-              Patient registration now collects the required account and health
-              details from the start. Profile photo is optional and can also be
-              uploaded later from the dashboard.
-            </p>
-
-            <div className="mt-10 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl border border-white/10 bg-white/7 p-5 backdrop-blur-sm">
-                <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-emerald-400/15 text-emerald-300">
-                  <UserRound size={26} />
-                </div>
-
-                <h3 className="text-xl font-black text-white">
-                  Complete Patient Profile
-                </h3>
-
-                <p className="mt-3 text-sm leading-7 text-slate-300">
-                  Add gender, date of birth, blood group, address, emergency
-                  contact, and optional notes while registering.
-                </p>
-              </div>
-
-              <div className="rounded-3xl border border-white/10 bg-white/7 p-5 backdrop-blur-sm">
-                <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-cyan-400/15 text-cyan-300">
-                  <Camera size={26} />
-                </div>
-
-                <h3 className="text-xl font-black text-white">
-                  Optional Photo Upload
-                </h3>
-
-                <p className="mt-3 text-sm leading-7 text-slate-300">
-                  Upload a profile photo now or skip it and add the photo later
-                  from the patient dashboard profile section.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-10 rounded-3xl border border-cyan-400/15 bg-white/5 p-5 backdrop-blur-sm">
-              <p className="text-sm font-black text-cyan-200">
-                OTP verification enabled
-              </p>
-              <p className="mt-2 text-sm leading-7 text-slate-300">
-                After creating your account, you will be redirected to OTP
-                verification to activate secure access.
-              </p>
-            </div>
+    <main className="min-h-screen bg-[#f3f6fa] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#baf4ea] bg-[#e6fbf7] px-3 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.13em] text-[#0f766e]">
+            <ShieldCheck size={13} />
+            MediLink Registration
           </div>
+
+          <h1 className="mt-3 text-[1.55rem] font-bold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.9rem]">
+            Create your MediLink account
+          </h1>
+
+          <p className="mx-auto mt-1.5 max-w-2xl text-sm font-medium leading-6 text-slate-600">
+            Register once to access patient, doctor, appointment, prescription,
+            payment, and support workflows from the correct portal.
+          </p>
         </div>
 
-        <div className="flex items-center px-6 py-10 sm:px-10 lg:px-12">
-          <div className="mx-auto w-full max-w-xl">
-            <p className="text-sm font-black uppercase tracking-[0.28em] text-emerald-600">
-              Register
-            </p>
+        <div className="mx-auto mt-6 grid max-w-6xl gap-4 lg:grid-cols-[0.86fr_1.14fr]">
+          <aside className="space-y-4">
+            <InfoPanel />
+            <RegistrationSteps />
+          </aside>
 
-            <h2 className="mt-4 text-3xl font-black text-slate-950">
-              Create your MediLink account
-            </h2>
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 px-4 py-3.5 sm:px-5">
+              <h2 className="text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
+                Account Registration
+              </h2>
+              <p className="mt-1 text-sm font-medium text-slate-500">
+                Fill in the required details to create your secure account.
+              </p>
+            </div>
 
-            <p className="mt-3 text-sm leading-7 text-slate-500">
-              Fill in your account details. Patient health/profile fields are
-              required so admin can see complete patient information.
-            </p>
+            <div className="p-4 sm:p-5">
+              <MessageStack error={error} success={success} devOtp={devOtp} />
 
-            {(error || success || devOtp) && (
-              <div className="mt-6 space-y-3">
-                {error && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    {error}
-                  </div>
-                )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <FormSection
+                  eyebrow="Account Information"
+                  title="Login and contact details"
+                  badge="Required"
+                >
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <InputField
+                      label="Full Name"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="Enter full name"
+                      icon={<User size={17} />}
+                    />
 
-                {success && (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-                    {success}
-                  </div>
-                )}
+                    <InputField
+                      label="Email Address"
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="Enter email address"
+                      icon={<Mail size={17} />}
+                    />
 
-                {devOtp && (
-                  <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
-                    <p className="font-black">Demo OTP:</p>
-                    <p className="mt-1 text-2xl font-black tracking-[0.25em]">
-                      {devOtp}
-                    </p>
-                    <Link
-                      to="/otp-verification"
-                      className="mt-3 inline-block font-black text-cyan-700"
-                    >
-                      Go to OTP verification
-                    </Link>
-                  </div>
-                )}
-              </div>
-            )}
+                    <InputField
+                      label="Phone Number"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="01700000000"
+                      icon={<Phone size={17} />}
+                    />
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-600">
-                      Account Information
-                    </p>
-                    <h3 className="mt-2 text-xl font-black text-slate-950">
-                      Login and contact details
-                    </h3>
-                  </div>
+                    <PasswordField
+                      value={formData.password}
+                      onChange={handleChange}
+                      showPassword={showPassword}
+                      onToggle={() => setShowPassword((previous) => !previous)}
+                    />
 
-                  <div className="rounded-2xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700">
-                    Required
-                  </div>
-                </div>
-
-                <div className="grid gap-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-700">
-                      Full Name
-                    </label>
-
-                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-cyan-500 focus-within:bg-white">
-                      <User size={18} className="shrink-0 text-slate-400" />
-
-                      <input
-                        type="text"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        placeholder="Enter full name"
-                        className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-700">
-                      Email Address
-                    </label>
-
-                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-cyan-500 focus-within:bg-white">
-                      <Mail size={18} className="shrink-0 text-slate-400" />
-
-                      <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        placeholder="Enter email address"
-                        className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-700">
-                      Phone Number
-                    </label>
-
-                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-cyan-500 focus-within:bg-white">
-                      <Phone size={18} className="shrink-0 text-slate-400" />
-
-                      <input
-                        type="text"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        placeholder="01700000000"
-                        className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-700">
-                      Password
-                    </label>
-
-                    <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-cyan-500 focus-within:bg-white">
-                      <Lock size={18} className="shrink-0 text-slate-400" />
-
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        placeholder="Minimum 6 characters"
-                        className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((previous) => !previous)}
-                        className="shrink-0 text-slate-400 transition hover:text-cyan-600"
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-700">
-                      Account Type
-                    </label>
-
-                    <select
+                    <SelectField
+                      label="Account Type"
                       name="role"
                       value={formData.role}
                       onChange={handleChange}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white"
-                    >
-                      <option value="patient">Patient</option>
-                      <option value="doctor">Doctor</option>
-                    </select>
+                      options={accountTypes}
+                      icon={<Users size={17} />}
+                      className="md:col-span-2"
+                    />
                   </div>
-                </div>
-              </div>
+                </FormSection>
 
-              {isPatient && (
-                <div className="rounded-[28px] border border-emerald-100 bg-emerald-50/30 p-5 shadow-sm">
-                  <div className="mb-5 flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-600">
-                        Patient Details
-                      </p>
-                      <h3 className="mt-2 text-xl font-black text-slate-950">
-                        Required health profile information
-                      </h3>
-                    </div>
-
-                    <div className="rounded-2xl bg-emerald-100 px-3 py-2 text-xs font-black text-emerald-700">
-                      Patient Only
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-black text-slate-700">
-                        Gender
-                      </label>
-
-                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition focus-within:border-emerald-500">
-                        <Users size={18} className="shrink-0 text-slate-400" />
-
-                        <select
-                          name="gender"
-                          value={formData.gender}
-                          onChange={handleChange}
-                          className="w-full min-w-0 bg-transparent text-sm font-black text-slate-800 outline-none"
-                        >
-                          <option value="">Select gender</option>
-                          <option value="male">Male</option>
-                          <option value="female">Female</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-black text-slate-700">
-                        Date of Birth
-                      </label>
-
-                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition focus-within:border-emerald-500">
-                        <CalendarDays
-                          size={18}
-                          className="shrink-0 text-slate-400"
-                        />
-
-                        <input
-                          type="date"
-                          name="dateOfBirth"
-                          value={formData.dateOfBirth}
-                          onChange={handleChange}
-                          className="w-full min-w-0 bg-transparent text-sm font-black text-slate-800 outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-black text-slate-700">
-                        Blood Group
-                      </label>
-
-                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition focus-within:border-emerald-500">
-                        <Droplets size={18} className="shrink-0 text-slate-400" />
-
-                        <select
-                          name="bloodGroup"
-                          value={formData.bloodGroup}
-                          onChange={handleChange}
-                          className="w-full min-w-0 bg-transparent text-sm font-black text-slate-800 outline-none"
-                        >
-                          <option value="">Select blood group</option>
-                          <option value="A+">A+</option>
-                          <option value="A-">A-</option>
-                          <option value="B+">B+</option>
-                          <option value="B-">B-</option>
-                          <option value="AB+">AB+</option>
-                          <option value="AB-">AB-</option>
-                          <option value="O+">O+</option>
-                          <option value="O-">O-</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-black text-slate-700">
-                        Emergency Contact Phone
-                      </label>
-
-                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition focus-within:border-emerald-500">
-                        <Phone size={18} className="shrink-0 text-slate-400" />
-
-                        <input
-                          type="text"
-                          name="emergencyContactPhone"
-                          value={formData.emergencyContactPhone}
-                          onChange={handleChange}
-                          placeholder="Emergency phone number"
-                          className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="mb-2 block text-sm font-black text-slate-700">
-                        Emergency Contact Name
-                      </label>
-
-                      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition focus-within:border-emerald-500">
-                        <UserRound size={18} className="shrink-0 text-slate-400" />
-
-                        <input
-                          type="text"
-                          name="emergencyContactName"
-                          value={formData.emergencyContactName}
-                          onChange={handleChange}
-                          placeholder="Guardian or emergency contact name"
-                          className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="mb-2 block text-sm font-black text-slate-700">
-                        Address
-                      </label>
-
-                      <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition focus-within:border-emerald-500">
-                        <MapPin
-                          size={18}
-                          className="mt-0.5 shrink-0 text-slate-400"
-                        />
-
-                        <textarea
-                          name="address"
-                          value={formData.address}
-                          onChange={handleChange}
-                          rows={3}
-                          placeholder="Enter patient address"
-                          className="w-full min-w-0 resize-none bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="mb-2 block text-sm font-black text-slate-700">
-                        Medical Notes
-                        <span className="ml-2 text-xs font-black text-slate-400">
-                          Optional
-                        </span>
-                      </label>
-
-                      <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition focus-within:border-emerald-500">
-                        <HeartPulse
-                          size={18}
-                          className="mt-0.5 shrink-0 text-slate-400"
-                        />
-
-                        <textarea
-                          name="medicalNotes"
-                          value={formData.medicalNotes}
-                          onChange={handleChange}
-                          rows={3}
-                          placeholder="Allergy, chronic disease, or regular medicine notes"
-                          className="w-full min-w-0 resize-none bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.28em] text-violet-600">
-                      Profile Photo
-                    </p>
-                    <h3 className="mt-2 text-xl font-black text-slate-950">
-                      Optional image upload
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-500">
-                      You can skip this now and upload/change your profile photo
-                      later from dashboard profile.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl bg-violet-50 px-3 py-2 text-xs font-black text-violet-700">
-                    Optional
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-4 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-4 sm:flex-row sm:items-center">
-                  <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-3xl border border-slate-200 bg-white text-slate-400 shadow-sm">
-                    {profileImagePreview ? (
-                      <img
-                        src={profileImagePreview}
-                        alt="Profile preview"
-                        className="h-full w-full object-cover"
+                {isPatient && (
+                  <FormSection
+                    eyebrow="Patient Details"
+                    title="Health profile information"
+                    badge="Patient Only"
+                    soft
+                  >
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <SelectField
+                        label="Gender"
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        options={genderOptions}
+                        icon={<Users size={17} />}
                       />
-                    ) : (
-                      <Camera size={30} />
-                    )}
-                  </div>
 
-                  <div className="min-w-0 flex-1">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition hover:-translate-y-0.5 hover:bg-slate-800">
-                      <Camera size={17} />
-                      Choose Photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoChange}
-                        className="hidden"
+                      <InputField
+                        label="Date of Birth"
+                        type="date"
+                        name="dateOfBirth"
+                        value={formData.dateOfBirth}
+                        onChange={handleChange}
+                        icon={<CalendarDays size={17} />}
                       />
-                    </label>
 
-                    <p className="mt-3 text-xs font-bold leading-5 text-slate-500">
-                      JPG, PNG, or WEBP. Maximum 2MB. This field is not
-                      required for registration.
+                      <SelectField
+                        label="Blood Group"
+                        name="bloodGroup"
+                        value={formData.bloodGroup}
+                        onChange={handleChange}
+                        options={bloodGroups.map((group) => ({
+                          value: group,
+                          label: group || "Select blood group",
+                        }))}
+                        icon={<Droplets size={17} />}
+                      />
+
+                      <InputField
+                        label="Emergency Contact Phone"
+                        name="emergencyContactPhone"
+                        value={formData.emergencyContactPhone}
+                        onChange={handleChange}
+                        placeholder="Emergency phone number"
+                        icon={<Phone size={17} />}
+                      />
+
+                      <InputField
+                        label="Emergency Contact Name"
+                        name="emergencyContactName"
+                        value={formData.emergencyContactName}
+                        onChange={handleChange}
+                        placeholder="Guardian or emergency contact name"
+                        icon={<UserRound size={17} />}
+                        className="sm:col-span-2"
+                      />
+
+                      <TextAreaField
+                        label="Address"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                        placeholder="Enter patient address"
+                        rows={3}
+                        icon={<MapPin size={17} />}
+                        className="sm:col-span-2"
+                      />
+
+                      <TextAreaField
+                        label="Medical Notes"
+                        optional
+                        name="medicalNotes"
+                        value={formData.medicalNotes}
+                        onChange={handleChange}
+                        placeholder="Allergy, chronic disease, or regular medicine notes"
+                        rows={3}
+                        icon={<HeartPulse size={17} />}
+                        className="sm:col-span-2"
+                      />
+                    </div>
+                  </FormSection>
+                )}
+
+                <PhotoSection
+                  profileImagePreview={profileImagePreview}
+                  profileImageFile={profileImageFile}
+                  onPhotoChange={handlePhotoChange}
+                  onRemove={() => {
+                    setProfileImageFile(null);
+                    setProfileImagePreview("");
+                  }}
+                />
+
+                <div className="rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-3.5">
+                  <div className="flex gap-3">
+                    <FileText size={18} className="mt-0.5 shrink-0 text-[#0f766e]" />
+                    <p className="text-[0.82rem] font-medium leading-6 text-slate-700">
+                      Patient details will be saved with the account and will be
+                      available for dashboard and admin review workflows.
                     </p>
-
-                    {profileImageFile && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProfileImageFile(null);
-                          setProfileImagePreview("");
-                        }}
-                        className="mt-3 text-xs font-black text-red-500 transition hover:text-red-600"
-                      >
-                        Remove selected photo
-                      </button>
-                    )}
                   </div>
                 </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{ color: "#ffffff" }}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#0fb3a1] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading && <Loader2 size={17} className="animate-spin" />}
+                  {loading ? "Creating account..." : "Create Account"}
+                </button>
+              </form>
+
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-center">
+                <p className="text-sm font-medium text-slate-600">
+                  Already have an account?{" "}
+                  <Link
+                    to="/login"
+                    className="font-bold text-[#0f766e] transition hover:text-[#13c8b4]"
+                  >
+                    Sign in
+                  </Link>
+                </p>
               </div>
-
-              <div className="rounded-[28px] border border-cyan-100 bg-cyan-50/70 p-5">
-                <div className="flex gap-3">
-                  <FileText size={20} className="mt-0.5 shrink-0 text-cyan-700" />
-                  <p className="text-sm font-bold leading-7 text-cyan-900">
-                    Patient account details will be saved in the user database
-                    and will appear in Admin Patient Management immediately
-                    after registration.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-400 px-5 py-3.5 text-sm font-black text-slate-950 shadow-lg shadow-emerald-500/20 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading && <Loader2 size={18} className="animate-spin" />}
-                {loading ? "Creating account..." : "Create Account"}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-slate-500">
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                className="font-black text-emerald-600 transition hover:text-emerald-700"
-              >
-                Sign in
-              </Link>
-            </p>
-          </div>
+            </div>
+          </section>
         </div>
       </section>
     </main>
+  );
+}
+
+function InfoPanel() {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
+          <ShieldCheck size={18} />
+        </span>
+        <div>
+          <h2 className="text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
+            Secure Role Registration
+          </h2>
+          <p className="mt-1 text-sm font-medium leading-6 text-slate-600">
+            Create a patient or doctor account with required contact details and
+            secure OTP verification.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        <MiniFeature
+          icon={<UserRound size={16} />}
+          title="Complete patient profile"
+          text="Patient accounts include gender, date of birth, blood group, address, and emergency contacts."
+        />
+        <MiniFeature
+          icon={<Camera size={16} />}
+          title="Optional profile photo"
+          text="Profile photo can be added during registration or uploaded later from the dashboard."
+        />
+        <MiniFeature
+          icon={<ShieldCheck size={16} />}
+          title="OTP verification enabled"
+          text="After registration, users verify their account before accessing the dashboard."
+        />
+      </div>
+    </section>
+  );
+}
+
+function RegistrationSteps() {
+  return (
+    <section className="rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-4 shadow-sm">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-[#0f766e]">
+        Registration Flow
+      </p>
+      <div className="mt-3 grid gap-2.5">
+        {[
+          "Fill account details",
+          "Add patient health profile if needed",
+          "Verify OTP to activate account",
+        ].map((item, index) => (
+          <div key={item} className="flex items-center gap-3 text-sm font-medium text-slate-700">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white text-[0.75rem] font-bold text-[#0f766e] ring-1 ring-[#baf4ea]">
+              {index + 1}
+            </span>
+            {item}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MiniFeature({ icon, title, text }) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+      <div className="flex items-start gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#0f766e] ring-1 ring-slate-200">
+          {icon}
+        </span>
+        <div>
+          <h3 className="text-[0.86rem] font-bold text-slate-950">{title}</h3>
+          <p className="mt-1 text-[0.78rem] font-medium leading-6 text-slate-600">
+            {text}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function MessageStack({ error, success, devOtp }) {
+  if (!error && !success && !devOtp) return null;
+
+  return (
+    <div className="mb-4 space-y-2">
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-semibold text-red-700">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-xl border border-[#baf4ea] bg-[#e6fbf7] px-3.5 py-2.5 text-sm font-semibold text-[#0f766e]">
+          {success}
+        </div>
+      )}
+      {devOtp && (
+        <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3.5 py-3 text-sm text-cyan-800">
+          <p className="font-bold">Demo OTP</p>
+          <p className="mt-1 text-xl font-bold tracking-[0.22em]">{devOtp}</p>
+          <Link to="/otp-verification" className="mt-2 inline-block font-bold text-cyan-700">
+            Go to OTP verification
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormSection({ eyebrow, title, badge, soft = false, children }) {
+  return (
+    <section
+      className={`rounded-2xl border p-4 shadow-sm ${
+        soft
+          ? "border-[#baf4ea] bg-[#f4fffc]"
+          : "border-slate-200 bg-white"
+      }`}
+    >
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-[#0f766e]">
+            {eyebrow}
+          </p>
+          <h3 className="mt-1.5 text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
+            {title}
+          </h3>
+        </div>
+        {badge && (
+          <span className="shrink-0 rounded-full bg-[#e6fbf7] px-3 py-1 text-[0.68rem] font-bold text-[#0f766e]">
+            {badge}
+          </span>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FieldShell({ label, optional = false, className = "", children }) {
+  return (
+    <div className={className}>
+      <label className="mb-1.5 block text-sm font-bold text-slate-700">
+        {label}
+        {optional && (
+          <span className="ml-2 text-xs font-semibold text-slate-400">Optional</span>
+        )}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function InputFrame({ icon, children }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 transition focus-within:border-[#13c8b4] focus-within:ring-4 focus-within:ring-[#e6fbf7]">
+      <span className="shrink-0 text-slate-400">{icon}</span>
+      {children}
+    </div>
+  );
+}
+
+function InputField({ label, type = "text", name, value, onChange, placeholder = "", icon, className = "" }) {
+  return (
+    <FieldShell label={label} className={className}>
+      <InputFrame icon={icon}>
+        <input
+          type={type}
+          name={name}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+        />
+      </InputFrame>
+    </FieldShell>
+  );
+}
+
+function PasswordField({ value, onChange, showPassword, onToggle }) {
+  return (
+    <FieldShell label="Password">
+      <InputFrame icon={<Lock size={17} />}>
+        <input
+          type={showPassword ? "text" : "password"}
+          name="password"
+          value={value}
+          onChange={onChange}
+          placeholder="Minimum 6 characters"
+          className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="shrink-0 text-slate-400 transition hover:text-[#0f766e]"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </InputFrame>
+    </FieldShell>
+  );
+}
+
+function SelectField({ label, name, value, onChange, options, icon, className = "" }) {
+  return (
+    <FieldShell label={label} className={className}>
+      <InputFrame icon={icon}>
+        <select
+          name={name}
+          value={value}
+          onChange={onChange}
+          className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-700 outline-none"
+        >
+          {options.map((option) => (
+            <option key={option.value || option.label} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </InputFrame>
+    </FieldShell>
+  );
+}
+
+function TextAreaField({ label, optional = false, name, value, onChange, placeholder = "", rows = 3, icon, className = "" }) {
+  return (
+    <FieldShell label={label} optional={optional} className={className}>
+      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 transition focus-within:border-[#13c8b4] focus-within:ring-4 focus-within:ring-[#e6fbf7]">
+        <span className="mt-0.5 shrink-0 text-slate-400">{icon}</span>
+        <textarea
+          name={name}
+          value={value}
+          onChange={onChange}
+          rows={rows}
+          placeholder={placeholder}
+          className="w-full min-w-0 resize-none bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+        />
+      </div>
+    </FieldShell>
+  );
+}
+
+function PhotoSection({ profileImagePreview, profileImageFile, onPhotoChange, onRemove }) {
+  return (
+    <FormSection eyebrow="Profile Photo" title="Optional image upload" badge="Optional">
+      <div className="flex flex-col gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3.5 sm:flex-row sm:items-center">
+        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm">
+          {profileImagePreview ? (
+            <img src={profileImagePreview} alt="Profile preview" className="h-full w-full object-cover" />
+          ) : (
+            <Camera size={26} />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-950 px-3.5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800">
+            <Camera size={16} />
+            Choose Photo
+            <input type="file" accept="image/*" onChange={onPhotoChange} className="hidden" />
+          </label>
+
+          <p className="mt-2 text-xs font-medium leading-5 text-slate-500">
+            JPG, PNG, or WEBP. Maximum 2MB. This field is not required for registration.
+          </p>
+
+          {profileImageFile && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="mt-2 text-xs font-bold text-red-500 transition hover:text-red-600"
+            >
+              Remove selected photo
+            </button>
+          )}
+        </div>
+      </div>
+    </FormSection>
   );
 }
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  BadgeCheck,
   Banknote,
   CalendarDays,
   CheckCircle2,
@@ -9,10 +8,72 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
   WalletCards,
 } from "lucide-react";
 import { appointmentApi, authApi, paymentApi } from "../services/api";
+
+function cx(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function formatDate(value) {
+  if (!value) return "N/A";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "N/A";
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatCurrency(value) {
+  return `৳${Number(value || 0).toLocaleString("en-US")}`;
+}
+
+function normalizeStatus(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getDoctorName(appointment) {
+  const name =
+    appointment?.doctor?.fullName ||
+    appointment?.doctor?.user?.name ||
+    appointment?.doctorName ||
+    "Doctor";
+
+  const cleanName = String(name)
+    .trim()
+    .replace(/^(dr\.?\s*)+/i, "")
+    .trim();
+
+  return cleanName ? `Dr. ${cleanName}` : "Doctor";
+}
+
+function getAppointmentFee(appointment) {
+  return Number(
+    appointment?.consultationFee ||
+      appointment?.doctor?.consultationFee ||
+      appointment?.amount ||
+      appointment?.fee ||
+      0
+  );
+}
+
+function getAppointmentTime(appointment) {
+  return `${appointment?.startTime || "—"} - ${appointment?.endTime || "—"}`;
+}
+
+function isPaidAppointment(appointment) {
+  const paymentStatus = normalizeStatus(
+    appointment?.paymentStatus || appointment?.payment?.status || ""
+  );
+
+  return ["paid", "completed", "success", "successful"].includes(paymentStatus);
+}
 
 function MockPayment() {
   const [user, setUser] = useState(null);
@@ -27,60 +88,9 @@ function MockPayment() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const formatDate = (value) => {
-    if (!value) return "N/A";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "N/A";
-    }
-
-    return date.toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const getDoctorName = (appointment) => {
-    const name =
-      appointment?.doctor?.fullName ||
-      appointment?.doctor?.user?.name ||
-      appointment?.doctorName ||
-      "Doctor";
-
-    const cleanName = String(name)
-      .trim()
-      .replace(/^(dr\.?\s*)+/i, "")
-      .trim();
-
-    return cleanName ? `Dr. ${cleanName}` : "Doctor";
-  };
-
-  const getAppointmentFee = (appointment) => {
-    return Number(
-      appointment?.consultationFee ||
-        appointment?.doctor?.consultationFee ||
-        appointment?.amount ||
-        appointment?.fee ||
-        0
-    );
-  };
-
-  const isPaidAppointment = (appointment) => {
-    const paymentStatus = String(
-      appointment?.paymentStatus || appointment?.payment?.status || ""
-    ).toLowerCase();
-
-    return ["paid", "completed", "success", "successful"].includes(
-      paymentStatus
-    );
-  };
-
   const pendingAppointments = useMemo(() => {
     return appointments.filter((appointment) => {
-      const status = String(appointment.status || "").toLowerCase();
+      const status = normalizeStatus(appointment.status);
 
       if (["cancelled", "rejected", "completed"].includes(status)) {
         return false;
@@ -96,16 +106,18 @@ function MockPayment() {
     );
   }, [pendingAppointments, selectedAppointmentId]);
 
+  const paidPayments = useMemo(() => {
+    return payments.filter((payment) => {
+      const status = normalizeStatus(payment.paymentStatus || payment.status || "paid");
+      return ["paid", "completed", "success", "successful"].includes(status);
+    });
+  }, [payments]);
+
   const totalPaid = useMemo(() => {
     return payments.reduce((total, payment) => {
       return total + Number(payment.amount || payment.paymentAmount || 0);
     }, 0);
   }, [payments]);
-
-  const paidPayments = payments.filter((payment) => {
-    const status = String(payment.paymentStatus || payment.status || "").toLowerCase();
-    return ["paid", "completed", "success", "successful"].includes(status);
-  });
 
   const fetchPaymentData = async (isRefresh = false) => {
     try {
@@ -117,21 +129,21 @@ function MockPayment() {
 
       setError("");
 
-      const [meResponse, appointmentResponse, paymentResponse] =
-        await Promise.all([
-          authApi.getMe(),
-          appointmentApi.getMyAppointments(),
-          paymentApi.getMyPayments(),
-        ]);
+      const [meResponse, appointmentResponse, paymentResponse] = await Promise.all([
+        authApi.getMe(),
+        appointmentApi.getMyAppointments(),
+        paymentApi.getMyPayments(),
+      ]);
 
       const appointmentList = appointmentResponse.appointments || [];
+      const paymentList = paymentResponse.payments || [];
 
       setUser(meResponse.user || null);
       setAppointments(appointmentList);
-      setPayments(paymentResponse.payments || []);
+      setPayments(paymentList);
 
       const firstUnpaid = appointmentList.find((appointment) => {
-        const status = String(appointment.status || "").toLowerCase();
+        const status = normalizeStatus(appointment.status);
 
         if (["cancelled", "rejected", "completed"].includes(status)) {
           return false;
@@ -176,14 +188,13 @@ function MockPayment() {
       const amount = getAppointmentFee(selectedAppointment);
 
       await paymentApi.createMockPayment({
-        appointmentId: selectedAppointment._id,
+        appointment: selectedAppointment._id,
         amount,
         paymentMethod,
         transactionId: `MOCK-${Date.now()}`,
       });
 
       setSuccess("Mock payment completed and saved to your account.");
-
       await fetchPaymentData(true);
     } catch (err) {
       setError(err.message || "Payment failed. Please try again.");
@@ -194,13 +205,13 @@ function MockPayment() {
 
   if (loading) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-50 px-6">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <Loader2 className="mx-auto animate-spin text-emerald-600" size={42} />
-          <p className="mt-5 text-lg font-black text-slate-900">
+      <main className="grid min-h-screen place-items-center bg-[#f3f6fa] px-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <Loader2 className="mx-auto animate-spin text-[#13c8b4]" size={32} />
+          <p className="mt-3 text-sm font-semibold text-slate-700">
             Loading payment workspace...
           </p>
-          <p className="mt-2 text-sm font-medium text-slate-500">
+          <p className="mt-1 text-sm font-medium text-slate-500">
             Fetching your appointments and payment history.
           </p>
         </div>
@@ -209,383 +220,331 @@ function MockPayment() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-50">
-      <div className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-emerald-300/30 blur-3xl" />
-      <div className="pointer-events-none absolute right-0 top-36 h-72 w-72 rounded-full bg-cyan-300/30 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 left-1/2 h-72 w-72 rounded-full bg-violet-300/20 blur-3xl" />
-
-      <section className="relative px-4 py-8 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[#f3f6fa] text-slate-900">
+      <section className="border-b border-white/10 bg-[#061817] px-4 py-7 text-white sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950 shadow-2xl shadow-slate-200">
-            <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-white/10 px-4 py-2 text-xs font-black text-emerald-200 backdrop-blur">
-                  <WalletCards className="h-4 w-4" />
-                  Live Mock Payment · MongoDB
-                </div>
-
-                <h1 className="mt-5 max-w-3xl text-3xl font-black leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
-                  Pay consultation fees with a{" "}
-                  <span className="bg-gradient-to-r from-emerald-300 via-cyan-300 to-sky-300 bg-clip-text text-transparent">
-                    secure mock payment flow.
-                  </span>
-                </h1>
-
-                <p className="mt-4 max-w-2xl text-sm font-medium leading-7 text-slate-300 sm:text-base">
-                  Select a pending appointment, complete mock payment, and keep
-                  payment history saved to your MediLink account.
-                </p>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <HeroPill icon={<ShieldCheck size={15} />} text="Secure flow" />
-                  <HeroPill icon={<BadgeCheck size={15} />} text="MongoDB saved" />
-                  <HeroPill icon={<Sparkles size={15} />} text="Instant update" />
-                </div>
+          <div className="grid gap-5 lg:grid-cols-[1fr_420px] lg:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.13em] text-teal-200">
+                <WalletCards size={13} />
+                Mock Payment
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-5 backdrop-blur">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
-                    Signed in patient
-                  </p>
+              <h1 className="mt-3 max-w-2xl text-[1.65rem] font-bold leading-tight tracking-[-0.025em] text-white sm:text-[2rem]">
+                Pay consultation fees with a secure mock workflow.
+              </h1>
 
-                  <div className="mt-4 flex items-center gap-3">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300">
-                      <CreditCard className="h-6 w-6" />
-                    </div>
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-300">
+                Select a pending appointment, complete a demonstration payment,
+                and keep saved payment records inside your MediLink account.
+              </p>
 
-                    <div className="min-w-0">
-                      <p className="truncate text-lg font-black text-white">
-                        {user?.name || "Patient"}
-                      </p>
-                      <p className="mt-1 truncate text-sm font-medium text-slate-300">
-                        {user?.email || "No email"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-4 flex flex-wrap gap-2 text-[0.76rem] font-semibold">
+                <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-slate-200">
+                  <ShieldCheck size={14} className="text-teal-300" />
+                  Secure payment flow
+                </span>
 
-                <div className="rounded-[1.5rem] border border-emerald-300/20 bg-emerald-400/10 p-5 backdrop-blur">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">
-                    Payment status
-                  </p>
+                <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-slate-200">
+                  <CheckCircle2 size={14} className="text-teal-300" />
+                  MongoDB saved records
+                </span>
 
-                  <p className="mt-3 text-2xl font-black text-white">
-                    {pendingAppointments.length} unpaid appointment(s)
-                  </p>
-
-                  <p className="mt-2 text-sm font-medium leading-6 text-emerald-100">
-                    Paid consultation records will appear instantly in your
-                    payment history.
-                  </p>
-                </div>
+                <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-slate-200">
+                  <CreditCard size={14} className="text-teal-300" />
+                  Mock mode
+                </span>
               </div>
             </div>
 
-            <div className="grid gap-4 border-t border-white/10 p-6 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard
-                icon={<CalendarDays size={22} />}
-                title="Pending Payments"
-                value={pendingAppointments.length}
-                tone="amber"
-              />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4 shadow-[0_20px_50px_rgba(2,6,23,0.22)]">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#13c8b4] text-slate-950">
+                    <Banknote size={20} />
+                  </span>
 
-              <StatCard
-                icon={<CheckCircle2 size={22} />}
-                title="Paid Records"
-                value={paidPayments.length}
-                tone="emerald"
-              />
+                  <div>
+                    <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-teal-200">
+                      Payment Workspace
+                    </p>
 
-              <StatCard
-                icon={<Banknote size={22} />}
-                title="Total Paid"
-                value={`৳${totalPaid.toLocaleString("en-US")}`}
-                tone="cyan"
-              />
+                    <h2 className="mt-1 text-[1.35rem] font-bold leading-none text-white">
+                      {pendingAppointments.length} Pending
+                    </h2>
+                  </div>
+                </div>
 
-              <StatCard
-                icon={<ShieldCheck size={22} />}
-                title="Payment Mode"
-                value="Mock"
-                tone="violet"
-              />
+                <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-[0.7rem] font-bold text-teal-200">
+                  Mock
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <HeroMiniCard
+                  title="Account"
+                  text={user?.email || user?.name || "Patient payment account"}
+                />
+                <HeroMiniCard
+                  title="Saved Records"
+                  text={`${paidPayments.length} paid record${paidPayments.length === 1 ? "" : "s"}`}
+                />
+              </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <section className="mt-6 grid gap-6 lg:grid-cols-[0.86fr_1.14fr]">
-            <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <div className="mb-6">
-                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700">
-                  <CreditCard className="h-4 w-4" />
-                  Complete Payment
-                </div>
+      <section className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            icon={<CalendarDays size={16} />}
+            label="Pending Payments"
+            value={pendingAppointments.length}
+          />
+          <StatCard
+            icon={<CheckCircle2 size={16} />}
+            label="Paid Records"
+            value={paidPayments.length}
+          />
+          <StatCard
+            icon={<Banknote size={16} />}
+            label="Total Paid"
+            value={formatCurrency(totalPaid)}
+          />
+          <StatCard icon={<ShieldCheck size={16} />} label="Payment Mode" value="Mock" />
+        </div>
 
-                <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950">
-                  Pending appointments
-                </h2>
+        <div className="mt-4">
+          <MessageBox error={error} success={success} />
+        </div>
 
-                <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
-                  Select one unpaid appointment and complete mock payment.
-                </p>
-              </div>
+        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <Panel title="Complete Payment" subtitle="Select one unpaid appointment and complete mock payment.">
+            {pendingAppointments.length === 0 ? (
+              <EmptyState
+                icon={<CheckCircle2 size={34} />}
+                title="No unpaid appointment found"
+                text="New unpaid appointments will appear here automatically."
+              />
+            ) : (
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-bold text-slate-700">
+                    Select Appointment
+                  </span>
 
-              {error && (
-                <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle size={18} />
-                    {error}
-                  </div>
-                </div>
-              )}
+                  <select
+                    value={selectedAppointmentId}
+                    onChange={(event) => setSelectedAppointmentId(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-[#13c8b4] focus:ring-4 focus:ring-[#e6fbf7]"
+                  >
+                    {pendingAppointments.map((appointment) => (
+                      <option key={appointment._id} value={appointment._id}>
+                        {getDoctorName(appointment)} · {formatDate(appointment.appointmentDate)} · {formatCurrency(getAppointmentFee(appointment))}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              {success && (
-                <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={18} />
-                    {success}
-                  </div>
-                </div>
-              )}
-
-              {pendingAppointments.length === 0 ? (
-                <div className="rounded-[1.6rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                  <CheckCircle2 className="mx-auto text-emerald-500" size={40} />
-                  <p className="mt-4 font-black text-slate-700">
-                    No unpaid appointment found.
-                  </p>
-                  <p className="mt-2 text-sm font-medium text-slate-500">
-                    New unpaid appointment will appear here automatically.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <label className="block">
-                    <span className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                      Select Appointment
-                    </span>
-
-                    <select
-                      value={selectedAppointmentId}
-                      onChange={(event) =>
-                        setSelectedAppointmentId(event.target.value)
-                      }
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                    >
-                      {pendingAppointments.map((appointment) => (
-                        <option key={appointment._id} value={appointment._id}>
-                          {getDoctorName(appointment)} ·{" "}
-                          {formatDate(appointment.appointmentDate)} · ৳
-                          {getAppointmentFee(appointment)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {selectedAppointment && (
-                    <div className="rounded-[1.6rem] border border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50 p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-lg font-black text-slate-950">
-                            {getDoctorName(selectedAppointment)}
-                          </p>
-
-                          <p className="mt-1 text-sm font-medium text-slate-600">
-                            {selectedAppointment.doctor?.specialization ||
-                              selectedAppointment.doctor?.department ||
-                              "Consultation"}
-                          </p>
-                        </div>
-
-                        <p className="text-3xl font-black text-emerald-700">
-                          ৳{getAppointmentFee(selectedAppointment)}
+                {selectedAppointment && (
+                  <article className="rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <h2 className="text-[1rem] font-bold tracking-[-0.01em] text-slate-950">
+                          {getDoctorName(selectedAppointment)}
+                        </h2>
+                        <p className="mt-1 text-sm font-semibold text-[#0f766e]">
+                          {selectedAppointment.doctor?.specialization ||
+                            selectedAppointment.doctor?.department ||
+                            "Consultation"}
                         </p>
                       </div>
 
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <InfoBox
-                          label="Appointment Date"
-                          value={formatDate(selectedAppointment.appointmentDate)}
-                        />
-
-                        <InfoBox
-                          label="Time"
-                          value={`${selectedAppointment.startTime || "—"} - ${
-                            selectedAppointment.endTime || "—"
-                          }`}
-                        />
-                      </div>
+                      <p className="text-[1.35rem] font-bold leading-none tracking-[-0.02em] text-[#0f766e]">
+                        {formatCurrency(getAppointmentFee(selectedAppointment))}
+                      </p>
                     </div>
-                  )}
 
-                  <label className="block">
-                    <span className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                      Payment Method
-                    </span>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <InfoBox
+                        label="Appointment Date"
+                        value={formatDate(selectedAppointment.appointmentDate)}
+                      />
+                      <InfoBox label="Time" value={getAppointmentTime(selectedAppointment)} />
+                    </div>
+                  </article>
+                )}
 
-                    <select
-                      value={paymentMethod}
-                      onChange={(event) => setPaymentMethod(event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-900 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                    >
-                      <option value="bkash">bKash</option>
-                      <option value="nagad">Nagad</option>
-                      <option value="card">Card</option>
-                      <option value="cash">Cash</option>
-                    </select>
-                  </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-bold text-slate-700">
+                    Payment Method
+                  </span>
 
-                  <button
-                    type="button"
-                    onClick={handlePayment}
-                    disabled={paying || !selectedAppointment}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition hover:from-emerald-700 hover:to-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  <select
+                    value={paymentMethod}
+                    onChange={(event) => setPaymentMethod(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-[#13c8b4] focus:ring-4 focus:ring-[#e6fbf7]"
                   >
-                    {paying ? (
-                      <Loader2 size={18} className="animate-spin" />
-                    ) : (
-                      <WalletCards size={18} />
-                    )}
-
-                    {paying ? "Processing Payment..." : "Pay Now"}
-                  </button>
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-4 py-2 text-xs font-black text-cyan-700">
-                    <Banknote className="h-4 w-4" />
-                    Payment History
-                  </div>
-
-                  <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950">
-                    Saved payment records
-                  </h2>
-
-                  <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
-                    History is loaded from your MediLink payment API.
-                  </p>
-                </div>
+                    <option value="bkash">bKash</option>
+                    <option value="nagad">Nagad</option>
+                    <option value="card">Card</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </label>
 
                 <button
                   type="button"
-                  onClick={() => fetchPaymentData(true)}
-                  disabled={refreshing}
-                  className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black text-slate-700 transition hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700 disabled:opacity-60"
+                  onClick={handlePayment}
+                  disabled={paying || !selectedAppointment}
+                  style={{ color: "#ffffff" }}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#0fb3a1] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <RefreshCw
-                    size={14}
-                    className={refreshing ? "animate-spin" : ""}
-                  />
-                  Refresh
+                  {paying ? (
+                    <Loader2 size={17} className="animate-spin" />
+                  ) : (
+                    <CreditCard size={17} />
+                  )}
+                  {paying ? "Processing Payment..." : "Pay Now"}
                 </button>
               </div>
+            )}
+          </Panel>
 
-              {payments.length === 0 ? (
-                <div className="rounded-[1.6rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                  <Banknote className="mx-auto text-slate-300" size={40} />
-                  <p className="mt-4 font-black text-slate-700">
-                    No payment history found.
-                  </p>
-                  <p className="mt-2 text-sm font-medium text-slate-500">
-                    Complete a mock payment and it will appear here.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {payments.map((payment) => {
-                    const amount = Number(
-                      payment.amount || payment.paymentAmount || 0
-                    );
+          <Panel
+            title="Payment History"
+            subtitle="Saved payment records loaded from your MediLink payment API."
+            action={
+              <button
+                type="button"
+                onClick={() => fetchPaymentData(true)}
+                disabled={refreshing}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                Refresh
+              </button>
+            }
+          >
+            {payments.length === 0 ? (
+              <EmptyState
+                icon={<Banknote size={34} />}
+                title="No payment history found"
+                text="Complete a mock payment and it will appear here."
+              />
+            ) : (
+              <div className="space-y-3">
+                {payments.map((payment) => {
+                  const amount = Number(payment.amount || payment.paymentAmount || 0);
 
-                    return (
-                      <article
-                        key={payment._id}
-                        className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40"
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="text-xl font-black text-slate-950">
-                              ৳{amount.toLocaleString("en-US")}
-                            </p>
-
-                            <p className="mt-1 text-sm font-medium text-slate-600">
-                              {formatDate(payment.createdAt)}
-                            </p>
-                          </div>
-
-                          <StatusBadge
-                            status={payment.paymentStatus || payment.status || "paid"}
-                          />
+                  return (
+                    <article
+                      key={payment._id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5 transition hover:border-[#baf4ea] hover:bg-white"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-[1.05rem] font-bold tracking-[-0.01em] text-slate-950">
+                            {formatCurrency(amount)}
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-slate-500">
+                            {formatDate(payment.createdAt)}
+                          </p>
                         </div>
 
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <InfoBox
-                            label="Method"
-                            value={payment.paymentMethod || "Mock payment"}
-                          />
+                        <StatusBadge status={payment.paymentStatus || payment.status || "paid"} />
+                      </div>
 
-                          <InfoBox
-                            label="Transaction"
-                            value={payment.transactionId || payment._id || "N/A"}
-                          />
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          </section>
-        </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <InfoBox label="Method" value={payment.paymentMethod || "Mock payment"} />
+                        <InfoBox label="Transaction" value={payment.transactionId || payment._id || "N/A"} />
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
+        </section>
       </section>
     </main>
   );
 }
 
-function HeroPill({ icon, text }) {
+function HeroMiniCard({ title, text }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] px-3 py-2 text-xs font-black text-slate-200">
-      <span className="text-emerald-300">{icon}</span>
-      {text}
-    </span>
+    <div className="rounded-xl border border-white/10 bg-white/[0.055] p-3">
+      <p className="text-[0.78rem] font-bold text-white">{title}</p>
+      <p className="mt-1 line-clamp-2 text-[0.72rem] font-medium leading-5 text-slate-400">
+        {text}
+      </p>
+    </div>
   );
 }
 
-function StatCard({ icon, title, value, tone = "emerald" }) {
-  const tones = {
-    emerald: "from-emerald-400 to-teal-500 text-emerald-950",
-    cyan: "from-cyan-400 to-sky-500 text-cyan-950",
-    violet: "from-violet-400 to-fuchsia-500 text-violet-950",
-    amber: "from-amber-300 to-orange-500 text-amber-950",
-  };
+function MessageBox({ error, success }) {
+  if (!error && !success) return null;
 
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.07] p-5 backdrop-blur">
-      <div
-        className={`mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${
-          tones[tone] || tones.emerald
-        }`}
-      >
-        {icon}
-      </div>
-
-      <p className="text-2xl font-black text-white sm:text-3xl">{value}</p>
-      <p className="mt-1 text-sm font-medium text-slate-300">{title}</p>
+    <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      {error && (
+        <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700">
+          <AlertCircle size={16} />
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-2 rounded-xl bg-[#e6fbf7] px-3 py-2.5 text-sm font-semibold text-[#0f766e]">
+          <CheckCircle2 size={16} />
+          {success}
+        </div>
+      )}
     </div>
+  );
+}
+
+function Panel({ title, subtitle, action, children }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+        <div>
+          <h2 className="text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
+            {title}
+          </h2>
+          {subtitle && <p className="mt-1 text-sm font-medium text-slate-500">{subtitle}</p>}
+        </div>
+        {action}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+function StatCard({ icon, label, value }) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white px-3.5 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
+            {icon}
+          </span>
+          <p className="truncate text-[0.76rem] font-medium text-slate-500">{label}</p>
+        </div>
+        <p className="shrink-0 text-[1.12rem] font-bold leading-none tracking-[-0.02em] text-slate-950">
+          {value}
+        </p>
+      </div>
+    </article>
   );
 }
 
 function InfoBox({ label, value }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+    <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-slate-400">
         {label}
       </p>
-      <p className="mt-1 break-words text-sm font-black text-slate-800">
+      <p className="mt-1 break-words text-[0.84rem] font-bold text-slate-950">
         {value || "N/A"}
       </p>
     </div>
@@ -593,23 +552,39 @@ function InfoBox({ label, value }) {
 }
 
 function StatusBadge({ status }) {
-  const cleanStatus = String(status || "paid").toLowerCase();
+  const cleanStatus = normalizeStatus(status || "paid");
 
   const tone =
     cleanStatus === "paid" ||
     cleanStatus === "completed" ||
-    cleanStatus === "success"
-      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+    cleanStatus === "success" ||
+    cleanStatus === "successful"
+      ? "border-[#baf4ea] bg-[#e6fbf7] text-[#0f766e]"
       : cleanStatus === "pending"
-      ? "border-amber-100 bg-amber-50 text-amber-700"
+      ? "border-amber-200 bg-amber-50 text-amber-700"
       : "border-slate-200 bg-slate-100 text-slate-700";
 
   return (
     <span
-      className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${tone}`}
+      className={cx(
+        "inline-flex w-fit rounded-full border px-2.5 py-1 text-[0.68rem] font-bold uppercase",
+        tone
+      )}
     >
       {cleanStatus.replace("_", " ")}
     </span>
+  );
+}
+
+function EmptyState({ icon, title, text }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+      <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-[#0f766e] shadow-sm">
+        {icon}
+      </div>
+      <p className="mt-4 text-sm font-bold text-slate-800">{title}</p>
+      <p className="mt-1 text-sm font-medium text-slate-500">{text}</p>
+    </div>
   );
 }
 
