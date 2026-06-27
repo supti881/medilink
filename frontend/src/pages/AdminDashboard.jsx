@@ -55,7 +55,6 @@ function getActiveView(hash) {
   if (hash === "#patients") return "patients";
   if (hash === "#appointments") return "appointments";
   if (hash === "#tickets") return "tickets";
-  if (hash === "#reissues") return "reissues";
   return "overview";
 }
 
@@ -249,7 +248,7 @@ function getStoredAdminProfile(user) {
         "",
       bio:
         savedProfile.bio ||
-        "Responsible for managing doctors, patients, support tickets, reissue requests and MediLink operational workflows.",
+        "Responsible for managing doctors, patients, support tickets and MediLink operational workflows.",
     };
   } catch {
     return {
@@ -327,7 +326,7 @@ function collectPatientsForAdmin(patientAccounts = [], tickets = [], replacement
         role: "patient",
         source,
         totalTickets: 0,
-        totalReissues: 0,
+        totalSupport: 0,
       });
     } else {
       const previous = patientMap.get(mapKey);
@@ -342,7 +341,7 @@ function collectPatientsForAdmin(patientAccounts = [], tickets = [], replacement
         role: "patient",
         source: previous.source === "account" ? "account" : source,
         totalTickets: previous.totalTickets || 0,
-        totalReissues: previous.totalReissues || 0,
+        totalSupport: previous.totalSupport || 0,
       });
     }
 
@@ -352,8 +351,8 @@ function collectPatientsForAdmin(patientAccounts = [], tickets = [], replacement
       patient.totalTickets = (patient.totalTickets || 0) + 1;
     }
 
-    if (source === "reissue") {
-      patient.totalReissues = (patient.totalReissues || 0) + 1;
+    if (source === "support") {
+      patient.totalSupport = (patient.totalSupport || 0) + 1;
     }
   };
 
@@ -366,7 +365,7 @@ function collectPatientsForAdmin(patientAccounts = [], tickets = [], replacement
   });
 
   replacementRequests.forEach((request) => {
-    addPatient(request.patient || request.user, "reissue");
+    addPatient(request.patient || request.user, "support");
   });
 
   return Array.from(patientMap.values()).map((patient) => ({
@@ -490,7 +489,7 @@ function getPatientSupportTickets(tickets = [], patient = {}) {
   });
 }
 
-function getPatientReissueRequests(requests = [], patient = {}) {
+function getPatientSupportRequests(requests = [], patient = {}) {
   return requests.filter((request) =>
     patientMatchesCandidate(patient, request.patient || {})
   );
@@ -527,7 +526,7 @@ function AdminDashboard() {
   const [patientAction, setPatientAction] = useState(null);
   const [patientStatusOverrides, setPatientStatusOverrides] = useState({});
   const [ticketSearch, setTicketSearch] = useState("");
-  const [reissueSearch, setReissueSearch] = useState("");
+  const [supportSearch, setSupportSearch] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -560,14 +559,13 @@ function AdminDashboard() {
           return;
         }
 
-        const [doctorsResponse, patientsResponse, ticketsResponse, reissueResponse] =
+        const [doctorsResponse, patientsResponse, ticketsResponse] =
           await Promise.all([
             (doctorApi.getAdminDoctors || doctorApi.getAll)(),
             authApi.getAdminPatients
               ? authApi.getAdminPatients()
               : Promise.resolve({ patients: [] }),
             supportTicketApi.getAllTickets(),
-            replacementRequestApi.getAllRequests(),
           ]);
 
         const profile = getStoredAdminProfile(currentUser);
@@ -583,7 +581,7 @@ function AdminDashboard() {
         setDoctors(doctorsResponse.doctors || []);
         setPatientAccounts(patientsResponse.patients || []);
         setTickets(ticketsResponse.tickets || []);
-        setReplacementRequests(reissueResponse.requests || []);
+        setReplacementRequests([]);
         setLastSynced(new Date().toISOString());
       } catch (err) {
         setError(
@@ -685,8 +683,8 @@ function AdminDashboard() {
     });
   }, [ticketSearch, tickets]);
 
-  const filteredReissues = useMemo(() => {
-    const query = reissueSearch.trim().toLowerCase();
+  const filteredSupport = useMemo(() => {
+    const query = supportSearch.trim().toLowerCase();
 
     if (!query) return replacementRequests;
 
@@ -702,7 +700,7 @@ function AdminDashboard() {
         .filter(Boolean)
         .some((item) => String(item).toLowerCase().includes(query));
     });
-  }, [reissueSearch, replacementRequests]);
+  }, [supportSearch, replacementRequests]);
 
   const openTickets = tickets.filter((ticket) =>
     ["open", "in_progress"].includes(ticket.status)
@@ -712,15 +710,15 @@ function AdminDashboard() {
     (ticket) => ticket.status === "resolved"
   );
 
-  const pendingReissue = replacementRequests.filter((request) =>
+  const pendingSupport = replacementRequests.filter((request) =>
     ["pending", "submitted", "under_review"].includes(request.status)
   );
 
-  const approvedReissue = replacementRequests.filter(
+  const approvedSupport = replacementRequests.filter(
     (request) => request.status === "approved"
   );
 
-  const rejectedReissue = replacementRequests.filter(
+  const rejectedSupport = replacementRequests.filter(
     (request) => request.status === "rejected"
   );
 
@@ -1008,14 +1006,14 @@ function AdminDashboard() {
     }
   };
 
-  const handlePatientReissueSave = async (request, form) => {
+  const handlePatientSupportSave = async (request, form) => {
     try {
       setActionLoading(true);
       setError("");
       setSuccess("");
 
       const payload = {
-        requestType: form.requestType?.trim() || request.requestType || "Replacement Request",
+        requestType: form.requestType?.trim() || request.requestType || "Support Request",
         reason: form.reason?.trim() || request.reason || "",
         status: form.status || request.status || "pending",
         paymentStatus: form.paymentStatus || request.paymentStatus || "pending",
@@ -1042,9 +1040,9 @@ function AdminDashboard() {
         )
       );
 
-      setSuccess("Reissue request details updated.");
+      setSuccess("Support request details updated.");
     } catch (err) {
-      setError(err.message || "Failed to update reissue details.");
+      setError(err.message || "Failed to update support details.");
     } finally {
       setActionLoading(false);
     }
@@ -1133,14 +1131,14 @@ function AdminDashboard() {
         paymentStatus: status === "approved" ? "waived" : "pending",
         adminNote:
           status === "approved"
-            ? "Duplicate prescription request approved for patient use."
-            : "Duplicate prescription request rejected after admin review.",
+            ? "Support request approved for patient use."
+            : "Support request rejected after admin review.",
       });
 
-      setSuccess(`Replacement request marked as ${status}.`);
+      setSuccess(`Support request marked as ${status}.`);
       await fetchAdminData(true);
     } catch (err) {
-      setError(err.message || "Failed to update replacement request.");
+      setError(err.message || "Failed to update support request.");
     } finally {
       setActionLoading(false);
     }
@@ -1151,7 +1149,7 @@ function AdminDashboard() {
       <div className="grid min-h-screen place-items-center bg-slate-100">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <Loader2
-            className="mx-auto mb-4 animate-spin text-violet-600"
+            className="mx-auto mb-4 animate-spin text-teal-600"
             size={34}
           />
           <p className="text-sm font-black uppercase tracking-[0.25em] text-slate-500">
@@ -1185,8 +1183,8 @@ function AdminDashboard() {
 
   return (
     <DashboardLayout
-      title={`Admin · ${adminProfile?.name || user?.name || "Control"}`}
-      subtitle="High-level control center for doctors, patients, appointments, support and reissues"
+      title="Admin Control Center"
+      subtitle="Manage doctors, patients, support tickets and MediLink operations"
       role="admin"
       user={dashboardUser}
       onRefresh={() => fetchAdminData(true)}
@@ -1203,9 +1201,9 @@ function AdminDashboard() {
           replacementRequests={replacementRequests}
           openTickets={openTickets}
           resolvedTickets={resolvedTickets}
-          pendingReissue={pendingReissue}
-          approvedReissue={approvedReissue}
-          rejectedReissue={rejectedReissue}
+          pendingSupport={pendingSupport}
+          approvedSupport={approvedSupport}
+          rejectedSupport={rejectedSupport}
         />
       )}
 
@@ -1252,7 +1250,6 @@ function AdminDashboard() {
           onStatusChange={setPatientStatusFilter}
           onViewDetails={(patient) => setPatientPanel({ type: "details", patient })}
           onViewSupport={(patient) => setPatientPanel({ type: "support", patient })}
-          onViewReissues={(patient) => setPatientPanel({ type: "reissues", patient })}
           onOpenAction={setPatientAction}
           actionLoading={actionLoading}
         />
@@ -1272,15 +1269,6 @@ function AdminDashboard() {
         />
       )}
 
-      {activeView === "reissues" && (
-        <ReissueRequestsLayout
-          requests={filteredReissues}
-          searchValue={reissueSearch}
-          onSearchChange={setReissueSearch}
-          actionLoading={actionLoading}
-          onReplacementUpdate={handleReplacementUpdate}
-        />
-      )}
 
       <DoctorDetailsModal
         doctor={doctorDetails}
@@ -1312,16 +1300,6 @@ function AdminDashboard() {
         onSave={handlePatientTicketSave}
       />
 
-      <PatientReissueHistoryModal
-        patient={patientPanel?.type === "reissues" ? patientPanel.patient : null}
-        requests={getPatientReissueRequests(
-          replacementRequests,
-          patientPanel?.type === "reissues" ? patientPanel.patient : {}
-        )}
-        saving={actionLoading}
-        onClose={() => setPatientPanel(null)}
-        onSave={handlePatientReissueSave}
-      />
 
       <PatientActionModal
         action={patientAction}
@@ -1337,15 +1315,15 @@ function MessageBox({ error, success }) {
   if (!error && !success) return null;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       {error && (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           {error}
         </p>
       )}
 
       {success && (
-        <p className="mt-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 first:mt-0">
+        <p className="mt-2 rounded-xl bg-[#e6fbf7] px-4 py-3 text-sm font-semibold text-[#0f766e] first:mt-0">
           {success}
         </p>
       )}
@@ -1353,83 +1331,126 @@ function MessageBox({ error, success }) {
   );
 }
 
+function SignalCard({ icon, title, text, tone = "slate" }) {
+  const tones = {
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    red: "border-red-200 bg-red-50 text-red-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+    teal: "border-[#baf4ea] bg-[#e6fbf7] text-[#0f766e]",
+  };
+
+  return (
+    <article className={`rounded-2xl border px-4 py-3 ${tones[tone] || tones.slate}`}>
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/70 shadow-sm">
+          {icon}
+        </span>
+        <div>
+          <h3 className="text-sm font-bold">{title}</h3>
+          <p className="mt-1 text-[0.78rem] font-medium leading-5 opacity-90">
+            {text}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+
+
 function OverviewLayout({
   doctors,
   tickets,
   patients,
-  replacementRequests,
   openTickets,
   resolvedTickets,
-  pendingReissue,
-  approvedReissue,
-  rejectedReissue,
 }) {
   const recentTickets = tickets.slice(0, 4);
   const recentDoctors = doctors.slice(0, 4);
+  const pendingDoctors = doctors.filter((doctor) => normalizeDoctorStatus(doctor.status) === "pending");
+  const activeDoctors = doctors.filter((doctor) => normalizeDoctorStatus(doctor.status) === "active");
 
   return (
-    <section className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <section className="space-y-4">
+      <Panel
+        title="Admin Notifications"
+        subtitle="Live operational signals from doctors, patients and support activity"
+        icon={<ShieldCheck size={18} />}
+      >
+        <div className="grid gap-3 lg:grid-cols-2">
+          <SignalCard
+            icon={<Stethoscope size={16} />}
+            tone="amber"
+            title={`${pendingDoctors.length} doctor profile${pendingDoctors.length === 1 ? "" : "s"} pending`}
+            text="Review pending doctor profiles and approve valid accounts."
+          />
+          <SignalCard
+            icon={<Headphones size={16} />}
+            tone="red"
+            title={`${openTickets.length} open support ticket${openTickets.length === 1 ? "" : "s"}`}
+            text="Check patient issues and close resolved support requests."
+          />
+          <SignalCard
+            icon={<Users size={16} />}
+            tone="slate"
+            title={`${patients.length} patient account${patients.length === 1 ? "" : "s"}`}
+            text="Monitor patient access and account activity."
+          />
+        </div>
+      </Panel>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
-          icon={<Stethoscope size={22} />}
+          icon={<Stethoscope size={18} />}
           label="Doctors"
           value={doctors.length}
-          tone="violet"
+          tone="teal"
         />
         <StatCard
-          icon={<Users size={22} />}
+          icon={<UserCheck size={18} />}
+          label="Active Doctors"
+          value={activeDoctors.length}
+          tone="emerald"
+        />
+        <StatCard
+          icon={<Users size={18} />}
           label="Patients"
           value={patients.length}
           tone="cyan"
         />
         <StatCard
-          icon={<Headphones size={22} />}
+          icon={<Headphones size={18} />}
           label="Open Tickets"
           value={openTickets.length}
           tone="amber"
         />
         <StatCard
-          icon={<CheckCircle2 size={22} />}
+          icon={<CheckCircle2 size={18} />}
           label="Resolved"
           value={resolvedTickets.length}
           tone="emerald"
         />
-        <StatCard
-          icon={<FileText size={22} />}
-          label="Reissues"
-          value={replacementRequests.length}
-          tone="slate"
-        />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Panel
           title="System Health Summary"
           subtitle="High-level admin snapshot from connected MediLink data"
-          icon={<ShieldCheck size={20} />}
+          icon={<ShieldCheck size={18} />}
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <InfoBlock label="Pending Reissues" value={pendingReissue.length} />
-            <InfoBlock
-              label="Approved Reissues"
-              value={approvedReissue.length}
-            />
-            <InfoBlock
-              label="Rejected Reissues"
-              value={rejectedReissue.length}
-            />
+            <InfoBlock label="Pending Doctors" value={pendingDoctors.length} />
+            <InfoBlock label="Active Doctors" value={activeDoctors.length} />
+            <InfoBlock label="Open Tickets" value={openTickets.length} />
             <InfoBlock label="Total Support Tickets" value={tickets.length} />
           </div>
 
-          <div className="mt-5 rounded-3xl border border-violet-100 bg-violet-50 p-5">
-            <p className="text-sm font-black text-violet-800">
-              Recommended Admin Power Level
+          <div className="mt-4 rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-4">
+            <p className="text-[0.72rem] font-bold uppercase tracking-[0.13em] text-[#0f766e]">
+              Admin Control Center
             </p>
-            <p className="mt-2 text-sm leading-6 text-violet-700">
-              This control center is now separated into independent layouts for
-              doctors, patients, appointments, support tickets and reissue
-              requests. Backend APIs for full patient and appointment management
-              can be connected next.
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-700">
+              This dashboard keeps doctor verification, patient monitoring and support management in one clean admin workspace.
             </p>
           </div>
         </Panel>
@@ -1437,7 +1458,7 @@ function OverviewLayout({
         <Panel
           title="Recent Support Tickets"
           subtitle="Latest patient support activity"
-          icon={<Headphones size={20} />}
+          icon={<Headphones size={18} />}
         >
           {recentTickets.length === 0 ? (
             <EmptyState text="No support tickets found." />
@@ -1446,10 +1467,10 @@ function OverviewLayout({
               {recentTickets.map((ticket) => (
                 <MiniRecord key={ticket._id}>
                   <div>
-                    <p className="font-black text-slate-950">
+                    <p className="text-[0.92rem] font-bold text-slate-950">
                       {ticket.subject || "Support Ticket"}
                     </p>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm font-medium text-slate-500">
                       {ticket.user?.name ||
                         ticket.patient?.name ||
                         ticket.email ||
@@ -1467,7 +1488,7 @@ function OverviewLayout({
       <Panel
         title="Recent Doctors"
         subtitle="Recently loaded doctor profiles"
-        icon={<Stethoscope size={20} />}
+        icon={<Stethoscope size={18} />}
       >
         {recentDoctors.length === 0 ? (
           <EmptyState text="No doctors found." />
@@ -1482,6 +1503,8 @@ function OverviewLayout({
     </section>
   );
 }
+
+
 
 function AdminProfileLayout({
   user,
@@ -1509,7 +1532,7 @@ function AdminProfileLayout({
   if (!editing) {
     return (
       <section id="profile" className="scroll-mt-6 space-y-6">
-        <div className="rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-6 shadow-sm">
+        <div className="rounded-[28px] border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-cyan-50 p-6 shadow-sm">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
               {displayImage ? (
@@ -1525,14 +1548,14 @@ function AdminProfileLayout({
               )}
 
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.45em] text-violet-700">
+                <p className="text-[11px] font-black uppercase tracking-[0.45em] text-teal-700">
                   Admin Profile
                 </p>
                 <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
                   {displayProfile.name || "MediLink Admin"}
                 </h2>
                 <p className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-600">
-                  <Mail size={16} className="text-violet-600" />
+                  <Mail size={16} className="text-teal-600" />
                   {user?.email || displayProfile.email || "No email profile"}
                 </p>
               </div>
@@ -1584,7 +1607,7 @@ function AdminProfileLayout({
 
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-start gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-teal-50 text-teal-700">
               <FileText size={22} />
             </div>
             <div>
@@ -1593,7 +1616,7 @@ function AdminProfileLayout({
               </h3>
               <p className="mt-2 text-sm font-semibold leading-7 text-slate-600">
                 {displayProfile.bio ||
-                  "Responsible for managing doctors, patients, support tickets, reissue requests and MediLink operational workflows."}
+                  "Responsible for managing doctors, patients, support tickets and MediLink operational workflows."}
               </p>
             </div>
           </div>
@@ -1604,7 +1627,7 @@ function AdminProfileLayout({
 
   return (
     <section id="profile" className="scroll-mt-6 space-y-6">
-      <div className="rounded-[28px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-6 shadow-sm">
+      <div className="rounded-[28px] border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-cyan-50 p-6 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <div className="relative h-28 w-28 shrink-0">
@@ -1620,7 +1643,7 @@ function AdminProfileLayout({
                 </div>
               )}
 
-              <label className="absolute -bottom-2 -right-2 grid h-11 w-11 cursor-pointer place-items-center rounded-2xl border border-violet-200 bg-violet-600 text-white shadow-lg transition hover:bg-violet-700">
+              <label className="absolute -bottom-2 -right-2 grid h-11 w-11 cursor-pointer place-items-center rounded-2xl border border-teal-200 bg-teal-600 text-white shadow-lg transition hover:bg-teal-700">
                 {photoUploading ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : (
@@ -1637,17 +1660,17 @@ function AdminProfileLayout({
             </div>
 
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.45em] text-violet-700">
+              <p className="text-[11px] font-black uppercase tracking-[0.45em] text-teal-700">
                 Edit Admin Profile
               </p>
               <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
                 {form.name || "MediLink Admin"}
               </h2>
               <p className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-600">
-                <Mail size={16} className="text-violet-600" />
+                <Mail size={16} className="text-teal-600" />
                 {user?.email || form.email || "No email profile"}
               </p>
-              <p className="mt-2 text-xs font-bold text-violet-600">
+              <p className="mt-2 text-xs font-bold text-teal-600">
                 Click the camera button to upload a profile photo from your PC.
               </p>
             </div>
@@ -1752,19 +1775,21 @@ function AdminProfileLayout({
 
 function ProfileInfoCard({ icon, label, value }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-5 grid h-11 w-11 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
         {icon}
       </div>
-      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-slate-400">
         {label}
       </p>
-      <p className="mt-2 break-words text-sm font-black text-slate-950">
+      <p className="mt-2 break-words text-sm font-bold text-slate-950">
         {value || "Not set"}
       </p>
     </div>
   );
 }
+
+
 
 function DoctorManagementLayout({
   doctors,
@@ -1775,7 +1800,6 @@ function DoctorManagementLayout({
   onStatusChange,
   onViewDetails,
   onViewSupport,
-  onViewReissues,
   onOpenAction,
   actionLoading,
 }) {
@@ -1788,7 +1812,7 @@ function DoctorManagementLayout({
           icon={<Stethoscope size={22} />}
           label="Total Doctors"
           value={statusCounts.total}
-          tone="violet"
+          tone="teal"
         />
         <StatCard
           icon={<Clock size={22} />}
@@ -1841,11 +1865,11 @@ function DoctorManagementLayout({
           ]}
         />
 
-        <div className="mt-5 rounded-3xl border border-violet-100 bg-violet-50/70 p-5">
-          <h3 className="text-sm font-black text-violet-900">
+        <div className="mt-5 rounded-3xl border border-teal-100 bg-teal-50/70 p-5">
+          <h3 className="text-sm font-black text-teal-900">
             Admin doctor workflow
           </h3>
-          <p className="mt-2 text-sm leading-6 text-violet-700">
+          <p className="mt-2 text-sm leading-6 text-teal-700">
             Pending doctors can be approved, rejected or requested to change information. Active doctors can be suspended or blocked. Suspended, rejected and blocked doctors can be reactivated after review.
           </p>
         </div>
@@ -1861,7 +1885,6 @@ function DoctorManagementLayout({
                 actionLoading={actionLoading}
                 onViewDetails={onViewDetails}
                 onViewSupport={onViewSupport}
-                onViewReissues={onViewReissues}
                 onOpenAction={onOpenAction}
               />
             ))}
@@ -1880,11 +1903,12 @@ function FilterTabs({ tabs, active, onChange }) {
           key={value}
           type="button"
           onClick={() => onChange(value)}
-          className={`rounded-full border px-4 py-2 text-xs font-black transition ${
+          className={`rounded-xl border px-3.5 py-2 text-xs font-bold transition ${
             active === value
-              ? "border-violet-300 bg-violet-600 text-white shadow-sm"
-              : "border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700"
+              ? "border-[#13c8b4] bg-[#13c8b4] text-white shadow-sm"
+              : "border-slate-200 bg-white text-slate-600 hover:border-[#baf4ea] hover:text-[#0f766e]"
           }`}
+          style={active === value ? { color: "#ffffff" } : undefined}
         >
           {label}
         </button>
@@ -1939,7 +1963,7 @@ function PatientManagementLayout({
           icon={<ShieldCheck size={22} />}
           label="Verified"
           value={statusCounts.verified}
-          tone="violet"
+          tone="teal"
         />
       </div>
 
@@ -1973,7 +1997,7 @@ function PatientManagementLayout({
             Admin patient workflow
           </h3>
           <p className="mt-2 text-sm leading-6 text-cyan-700">
-            Admin should monitor patient access, support/reissue activity and account risk. Medical profile fields stay view-only for privacy; patients update their own health/profile data.
+            Admin should monitor patient access, support/support activity and account risk. Medical profile fields stay view-only for privacy; patients update their own health/profile data.
           </p>
         </div>
 
@@ -1988,7 +2012,6 @@ function PatientManagementLayout({
                 actionLoading={actionLoading}
                 onViewDetails={onViewDetails}
                 onViewSupport={onViewSupport}
-                onViewReissues={onViewReissues}
                 onOpenAction={onOpenAction}
               />
             ))}
@@ -2027,7 +2050,6 @@ function PatientCard({
   actionLoading = false,
   onViewDetails,
   onViewSupport,
-  onViewReissues,
   onOpenAction,
 }) {
   const status = normalizePatientStatus(patient.status);
@@ -2060,7 +2082,7 @@ function PatientCard({
         <InfoBlock label="Verification" value={patient.isVerified ? "Verified" : "Unverified"} />
         <InfoBlock label="Blood Group" value={patient.bloodGroup || "Not set"} />
         <InfoBlock label="Support Tickets" value={patient.totalTickets || 0} />
-        <InfoBlock label="Reissue Requests" value={patient.totalReissues || 0} />
+        <InfoBlock label="Support Requests" value={patient.totalSupport || 0} />
       </div>
 
       {patient.adminNote && (
@@ -2086,16 +2108,6 @@ function PatientCard({
             onClick={() => onViewSupport(patient)}
           >
             Support History
-          </DoctorActionButton>
-        )}
-
-        {typeof onViewReissues === "function" && (
-          <DoctorActionButton
-            tone="white"
-            icon={<FileText size={15} />}
-            onClick={() => onViewReissues(patient)}
-          >
-            Reissues
           </DoctorActionButton>
         )}
 
@@ -2216,7 +2228,7 @@ function PatientDetailsModal({ patient, onClose }) {
           </h3>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <InfoBlock label="Support Tickets" value={patient.totalTickets || 0} />
-            <InfoBlock label="Reissue Requests" value={patient.totalReissues || 0} />
+            <InfoBlock label="Support Requests" value={patient.totalSupport || 0} />
             <InfoBlock label="Appointments" value={patient.totalAppointments || "Next phase"} />
             <InfoBlock label="Payments" value={patient.totalPayments || "Next phase"} />
             <InfoBlock label="Last Status Update" value={formatDateTime(patient.statusUpdatedAt)} />
@@ -2420,64 +2432,12 @@ function PatientSupportTicketCard({ ticket, saving = false, onSave }) {
   );
 }
 
-function PatientReissueHistoryModal({ patient, requests = [], saving = false, onClose, onSave }) {
-  if (!patient) return null;
 
-  return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/60 p-4">
-      <div className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-violet-50 text-violet-700 shadow-sm">
-              <FileText size={24} />
-            </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-500">
-                Patient Reissue Details
-              </p>
-              <h2 className="mt-1 text-2xl font-black text-slate-950">
-                {patient.name || "Patient"}
-              </h2>
-              <p className="mt-1 text-sm font-bold text-violet-700">
-                {requests.length} reissue request{requests.length === 1 ? "" : "s"}
-              </p>
-            </div>
-          </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-          >
-            Close
-          </button>
-        </div>
-
-        {requests.length === 0 ? (
-          <div className="mt-6">
-            <EmptyState text="No reissue requests found for this patient." />
-          </div>
-        ) : (
-          <div className="mt-6 space-y-4">
-            {requests.map((request) => (
-              <PatientReissueRequestCard
-                key={request._id || `${request.requestType}-${request.createdAt}`}
-                request={request}
-                saving={saving}
-                onSave={onSave}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PatientReissueRequestCard({ request, saving = false, onSave }) {
+function PatientSupportRequestCard({ request, saving = false, onSave }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
-    requestType: request.requestType || "Replacement Request",
+    requestType: request.requestType || "Support Request",
     reason: request.reason || "",
     status: request.status || "pending",
     paymentStatus: request.paymentStatus || "pending",
@@ -2486,7 +2446,7 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
 
   useEffect(() => {
     setForm({
-      requestType: request.requestType || "Replacement Request",
+      requestType: request.requestType || "Support Request",
       reason: request.reason || "",
       status: request.status || "pending",
       paymentStatus: request.paymentStatus || "pending",
@@ -2510,7 +2470,7 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-3xl border border-violet-100 bg-violet-50/60 p-5">
+    <form onSubmit={handleSubmit} className="rounded-3xl border border-teal-100 bg-teal-50/60 p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           {editing ? (
@@ -2518,7 +2478,7 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
           ) : (
             <>
               <h3 className="text-lg font-black text-slate-950">
-                {request.requestType || "Replacement Request"}
+                {request.requestType || "Support Request"}
               </h3>
               <p className="mt-1 text-xs font-bold text-slate-400">
                 Requested: {formatDateTime(request.createdAt)}
@@ -2542,7 +2502,7 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
 
       {!editing ? (
         <>
-          <p className="mt-4 break-all rounded-2xl bg-white px-4 py-3 font-mono text-xs font-bold text-violet-700">
+          <p className="mt-4 break-all rounded-2xl bg-white px-4 py-3 font-mono text-xs font-bold text-teal-700">
             {request.prescriptionToken || "No token"}
           </p>
           <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-slate-700">
@@ -2553,8 +2513,8 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
             <InfoBlock label="Payment Status" value={request.paymentStatus || "pending"} />
             <InfoBlock label="Last Updated" value={formatDateTime(request.updatedAt)} />
           </div>
-          <div className="mt-4 rounded-2xl border border-violet-100 bg-white p-4">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-500">
+          <div className="mt-4 rounded-2xl border border-teal-100 bg-white p-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-500">
               Admin Note
             </p>
             <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
@@ -2573,7 +2533,7 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
                 name="status"
                 value={form.status}
                 onChange={handleInputChange}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-violet-500"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-teal-500"
               >
                 <option value="pending">Pending</option>
                 <option value="submitted">Submitted</option>
@@ -2590,7 +2550,7 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
                 name="paymentStatus"
                 value={form.paymentStatus}
                 onChange={handleInputChange}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-violet-500"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-teal-500"
               >
                 <option value="pending">Pending</option>
                 <option value="paid">Paid</option>
@@ -2615,10 +2575,10 @@ function PatientReissueRequestCard({ request, saving = false, onSave }) {
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}
-              Save Reissue Details
+              Save Support Details
             </button>
           </div>
         </>
@@ -2693,7 +2653,7 @@ function PatientActionModal({ action, saving, onClose, onConfirm }) {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             rows={4}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-500 focus:bg-white"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-teal-500 focus:bg-white"
           />
         </div>
 
@@ -2734,7 +2694,7 @@ function AppointmentManagementLayout({ doctors }) {
             icon={<Stethoscope size={20} />}
             label="Doctors Available"
             value={doctors.length}
-            tone="violet"
+            tone="teal"
           />
           <StatCard
             icon={<CalendarDays size={20} />}
@@ -2756,7 +2716,7 @@ function AppointmentManagementLayout({ doctors }) {
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             Your current admin dashboard API is connected with doctors, support
-            tickets and reissue requests. To show all patient appointment
+            tickets and support requests. To show all patient appointment
             bookings here, we need to add an admin endpoint like{" "}
             <span className="rounded-lg bg-white px-2 py-1 font-mono text-xs font-bold text-slate-800">
               GET /api/appointments/admin
@@ -2774,7 +2734,7 @@ function AppointmentManagementLayout({ doctors }) {
               <h3 className="text-lg font-black text-slate-950">
                 {formatDoctorName(doctor.fullName)}
               </h3>
-              <p className="mt-1 text-sm font-bold text-violet-700">
+              <p className="mt-1 text-sm font-bold text-teal-700">
                 {doctor.specialization || doctor.department || "Specialist"}
               </p>
 
@@ -2977,7 +2937,7 @@ function SupportTicketsLayout({
   );
 }
 
-function ReissueRequestsLayout({
+function SupportRequestsLayout({
   requests,
   searchValue,
   onSearchChange,
@@ -2985,21 +2945,21 @@ function ReissueRequestsLayout({
   onReplacementUpdate,
 }) {
   return (
-    <section id="reissues" className="scroll-mt-6">
+    <section id="support" className="scroll-mt-6">
       <Panel
-        title="Reissue Request Management"
-        subtitle="Admin can approve or reject lost/damaged prescription replacement requests"
+        title="Support Request Management"
+        subtitle="Admin can approve or reject lost/damaged prescription support requests"
         icon={<FileText size={20} />}
         action={
           <SearchBox
             value={searchValue}
             onChange={onSearchChange}
-            placeholder="Search reissues..."
+            placeholder="Search support..."
           />
         }
       >
         {requests.length === 0 ? (
-          <EmptyState text="No reissue requests found." />
+          <EmptyState text="No support requests found." />
         ) : (
           <div className="space-y-4">
             {requests.map((request) => {
@@ -3020,7 +2980,7 @@ function ReissueRequestsLayout({
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
                       <h3 className="text-lg font-black text-slate-950">
-                        {request.requestType || "Replacement Request"}
+                        {request.requestType || "Support Request"}
                       </h3>
 
                       <p className="mt-1 text-sm text-slate-600">
@@ -3030,7 +2990,7 @@ function ReissueRequestsLayout({
                           "Patient"}
                       </p>
 
-                      <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 font-mono text-xs font-bold text-violet-700">
+                      <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 font-mono text-xs font-bold text-teal-700">
                         {request.prescriptionToken || "No token"}
                       </p>
 
@@ -3074,8 +3034,8 @@ function ReissueRequestsLayout({
                         <div>
                           <p className="text-sm font-black">
                             {isApproved
-                              ? "Approved reissue request"
-                              : "Rejected reissue request"}
+                              ? "Approved support request"
+                              : "Rejected support request"}
                           </p>
                           <p className="mt-1 text-xs font-semibold opacity-80">
                             This request is already finalized, so approve/reject actions are hidden.
@@ -3157,7 +3117,7 @@ function DoctorCard({ doctor, compact = false, actionLoading = false, onViewDeta
           <h3 className="text-lg font-black text-slate-950">
             {formatDoctorName(doctor.fullName || doctor.user?.name)}
           </h3>
-          <p className="mt-1 text-sm font-bold text-violet-700">
+          <p className="mt-1 text-sm font-bold text-teal-700">
             {doctor.specialization || "Specialist"} · ৳{doctor.consultationFee || 0}
           </p>
           <p className="mt-1 text-sm text-slate-500">
@@ -3186,7 +3146,7 @@ function DoctorCard({ doctor, compact = false, actionLoading = false, onViewDeta
           )}
 
           {doctor.adminNote && (
-            <p className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm font-semibold leading-6 text-violet-700">
+            <p className="mt-4 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold leading-6 text-teal-700">
               {doctor.adminNote}
             </p>
           )}
@@ -3239,12 +3199,13 @@ function getDoctorActionIcon(icon) {
 function DoctorActionButton({ children, icon, tone = "white", disabled = false, onClick }) {
   const tones = {
     white:
-      "border-slate-200 bg-white text-slate-700 hover:border-violet-200 hover:text-violet-700",
+      "border-slate-200 bg-white text-slate-700 hover:border-[#baf4ea] hover:text-[#0f766e]",
     emerald:
       "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
     red: "border-red-200 bg-red-50 text-red-700 hover:bg-red-100",
     amber: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
     cyan: "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100",
+    teal: "border-[#baf4ea] bg-[#e6fbf7] text-[#0f766e] hover:bg-teal-100",
   };
 
   return (
@@ -3252,7 +3213,7 @@ function DoctorActionButton({ children, icon, tone = "white", disabled = false, 
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
         tones[tone] || tones.white
       }`}
     >
@@ -3261,6 +3222,8 @@ function DoctorActionButton({ children, icon, tone = "white", disabled = false, 
     </button>
   );
 }
+
+
 
 function DoctorDetailsModal({ doctor, onClose }) {
   if (!doctor) return null;
@@ -3277,7 +3240,7 @@ function DoctorDetailsModal({ doctor, onClose }) {
               <h2 className="text-2xl font-black text-slate-950">
                 {formatDoctorName(doctor.fullName || doctor.user?.name)}
               </h2>
-              <p className="mt-1 text-sm font-bold text-violet-700">
+              <p className="mt-1 text-sm font-bold text-teal-700">
                 {doctor.specialization || "Specialist"} · {doctor.department || "Department not set"}
               </p>
               <p className="mt-1 text-sm text-slate-500">
@@ -3335,11 +3298,11 @@ function DoctorDetailsModal({ doctor, onClose }) {
           )}
         </div>
 
-        <div className="mt-5 rounded-3xl border border-violet-100 bg-violet-50 p-5">
-          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-violet-500">
+        <div className="mt-5 rounded-3xl border border-teal-100 bg-teal-50 p-5">
+          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-teal-500">
             Admin Note
           </h3>
-          <p className="mt-2 text-sm leading-6 text-violet-700">
+          <p className="mt-2 text-sm leading-6 text-teal-700">
             {doctor.adminNote || "No admin note has been added for this doctor."}
           </p>
         </div>
@@ -3380,7 +3343,7 @@ function DoctorActionModal({ action, saving, onClose, onConfirm }) {
             value={note}
             onChange={(event) => setNote(event.target.value)}
             rows={4}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-500 focus:bg-white"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-teal-500 focus:bg-white"
           />
         </div>
 
@@ -3418,32 +3381,36 @@ function MiniRecord({ children }) {
 
 function Panel({ title, subtitle, icon, action, children }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-start gap-3">
-          {icon && (
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-violet-50 text-violet-700">
-              {icon}
-            </div>
-          )}
-
-          <div>
-            <h2 className="text-xl font-black text-slate-950">{title}</h2>
-            {subtitle && (
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                {subtitle}
-              </p>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 px-4 py-3.5 sm:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-3">
+            {icon && (
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
+                {icon}
+              </div>
             )}
-          </div>
-        </div>
 
-        {action}
+            <div>
+              <h2 className="text-[1rem] font-bold tracking-[-0.01em] text-slate-950">{title}</h2>
+              {subtitle && (
+                <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {action}
+        </div>
       </div>
 
-      {children}
+      <div className="p-4 sm:p-5">{children}</div>
     </div>
   );
 }
+
+
 
 function SearchBox({ value, onChange, placeholder }) {
   return (
@@ -3460,42 +3427,48 @@ function SearchBox({ value, onChange, placeholder }) {
 }
 
 function StatCard({ icon, label, value, tone = "slate" }) {
-  const tones = {
-    violet: "from-violet-500 to-fuchsia-600",
-    cyan: "from-cyan-500 to-blue-600",
-    amber: "from-amber-500 to-orange-600",
-    emerald: "from-emerald-500 to-teal-600",
-    red: "from-red-500 to-rose-600",
-    slate: "from-slate-700 to-slate-950",
+  const toneClass = {
+    teal: "bg-[#e6fbf7] text-[#0f766e]",
+    cyan: "bg-cyan-50 text-cyan-700",
+    amber: "bg-amber-50 text-amber-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    red: "bg-red-50 text-red-700",
+    slate: "bg-slate-100 text-slate-700",
   };
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div
-        className={`mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br ${
-          tones[tone] || tones.slate
-        } text-white shadow-sm`}
-      >
-        {icon}
+    <div className="rounded-2xl border border-slate-200 bg-white px-3.5 py-3 shadow-sm transition hover:-translate-y-0.5 hover:border-[#baf4ea] hover:shadow-md">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${toneClass[tone] || toneClass.slate}`}>
+            {icon}
+          </span>
+          <p className="truncate text-[0.76rem] font-medium text-slate-500">{label}</p>
+        </div>
+        <p className="shrink-0 text-[1.12rem] font-bold leading-none tracking-[-0.02em] text-slate-950">
+          {value}
+        </p>
       </div>
-      <p className="text-3xl font-black text-slate-950">{value}</p>
-      <p className="mt-1 text-sm font-bold text-slate-500">{label}</p>
     </div>
   );
 }
 
+
+
 function InfoBlock({ label, value }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-slate-400">
         {label}
       </p>
-      <p className="mt-1 break-words text-sm font-black text-slate-800">
+      <p className="mt-1 break-words text-[0.86rem] font-bold text-slate-900">
         {value || "Not set"}
       </p>
     </div>
   );
 }
+
+
 
 function StatusBadge({ status }) {
   return (
@@ -3511,12 +3484,14 @@ function StatusBadge({ status }) {
 
 function EmptyState({ text }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-      <ShieldCheck className="mx-auto mb-3 text-slate-400" size={32} />
-      <p className="text-sm font-bold text-slate-500">{text}</p>
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-7 text-center">
+      <ShieldCheck className="mx-auto mb-3 text-slate-400" size={30} />
+      <p className="text-sm font-semibold text-slate-500">{text}</p>
     </div>
   );
 }
+
+
 
 function FormField({
   label,
@@ -3540,7 +3515,7 @@ function FormField({
         onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-500 focus:bg-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-teal-500 focus:bg-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
       />
     </div>
   );
@@ -3566,7 +3541,7 @@ function TextAreaField({
         onChange={onChange}
         rows={rows}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-violet-500 focus:bg-white"
+        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-teal-500 focus:bg-white"
       />
     </div>
   );

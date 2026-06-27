@@ -23,66 +23,81 @@ export function formatDateTime(dateValue) {
 }
 
 const statusStyles = {
-  pending: "bg-amber-50 text-amber-800 ring-amber-200",
-  approved: "bg-sky-50 text-sky-800 ring-sky-200",
-  confirmed: "bg-sky-50 text-sky-800 ring-sky-200",
-  completed: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  open: "bg-rose-50 text-rose-800 ring-rose-200",
-  in_progress: "bg-violet-50 text-violet-800 ring-violet-200",
-  resolved: "bg-slate-100 text-slate-700 ring-slate-200",
-  rejected: "bg-red-50 text-red-800 ring-red-200",
-  active: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  submitted: "bg-cyan-50 text-cyan-800 ring-cyan-200",
-  under_review: "bg-violet-50 text-violet-800 ring-violet-200",
+  pending: "border-amber-200 bg-amber-50 text-amber-700",
+  approved: "border-sky-200 bg-sky-50 text-sky-700",
+  confirmed: "border-sky-200 bg-sky-50 text-sky-700",
+  completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  paid: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  open: "border-rose-200 bg-rose-50 text-rose-700",
+  in_progress: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  resolved: "border-slate-200 bg-slate-100 text-slate-700",
+  rejected: "border-red-200 bg-red-50 text-red-700",
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  submitted: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  under_review: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  cancelled: "border-slate-200 bg-slate-100 text-slate-700",
+  private: "border-slate-200 bg-slate-100 text-slate-700",
+  doctor_visible: "border-[#baf4ea] bg-[#e6fbf7] text-[#0f766e]",
 };
 
 export function StatusBadge({ status }) {
-  const key = (status || "unknown").toLowerCase().replace(/\s/g, "_");
+  const key = String(status || "unknown").toLowerCase().replace(/\s/g, "_");
   const style =
-    statusStyles[key] || "bg-slate-100 text-slate-700 ring-slate-200";
+    statusStyles[key] || "border-slate-200 bg-slate-100 text-slate-700";
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide ring-1 ${style}`}
+      className={`inline-flex shrink-0 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wide ${style}`}
     >
-      {(status || "unknown").replace(/_/g, " ")}
+      {String(status || "unknown").replace(/_/g, " ")}
     </span>
   );
 }
 
 export function StatCard({ icon, label, value, hint, tone = "slate" }) {
-  const tones = {
-    emerald: "from-emerald-500/15 to-teal-500/5 border-emerald-100",
-    cyan: "from-cyan-500/15 to-sky-500/5 border-cyan-100",
-    violet: "from-violet-500/15 to-fuchsia-500/5 border-violet-100",
-    amber: "from-amber-500/15 to-orange-500/5 border-amber-100",
-    rose: "from-rose-500/15 to-pink-500/5 border-rose-100",
-    slate: "from-slate-500/10 to-slate-500/5 border-slate-200",
+  const toneClass = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    cyan: "bg-cyan-50 text-cyan-700",
+    violet: "bg-violet-50 text-violet-700",
+    amber: "bg-amber-50 text-amber-700",
+    rose: "bg-rose-50 text-rose-700",
+    teal: "bg-[#e6fbf7] text-[#0f766e]",
+    slate: "bg-slate-100 text-slate-700",
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4 }}
-      className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br p-5 shadow-sm ${tones[tone] || tones.slate}`}
+      whileHover={{ y: -2 }}
+      className="rounded-2xl border border-slate-200 bg-white px-3.5 py-3 shadow-sm transition hover:border-[#baf4ea] hover:shadow-md"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-slate-950 text-white shadow-md">
-          {icon}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
+              toneClass[tone] || toneClass.slate
+            }`}
+          >
+            {icon}
+          </span>
+
+          <div className="min-w-0">
+            <p className="truncate text-[0.76rem] font-medium text-slate-500">
+              {label}
+            </p>
+            {hint && (
+              <p className="mt-0.5 truncate text-[0.68rem] font-medium text-slate-400">
+                {hint}
+              </p>
+            )}
+          </div>
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          Live
-        </span>
+
+        <p className="shrink-0 text-[1.12rem] font-bold leading-none tracking-[-0.02em] text-slate-950">
+          {value}
+        </p>
       </div>
-      <p className="mt-4 text-3xl font-black tracking-tight text-slate-950">
-        {value}
-      </p>
-      <p className="mt-1 text-sm font-bold text-slate-700">{label}</p>
-      {hint && (
-        <p className="mt-1 text-xs font-medium text-slate-500">{hint}</p>
-      )}
     </motion.div>
   );
 }
@@ -99,63 +114,71 @@ export function DataPanel({
   return (
     <section
       id={id}
-      className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_40px_rgba(15,23,42,0.06)]"
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-5 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3.5 sm:px-5">
         <div>
-          <h2 className="text-lg font-black text-slate-950">{title}</h2>
+          <h2 className="text-[1rem] font-bold tracking-[-0.01em] text-slate-950">
+            {title}
+          </h2>
           {subtitle && (
-            <p className="mt-0.5 text-xs font-medium text-slate-500">
+            <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
               {subtitle}
             </p>
           )}
         </div>
+
         <div className="flex items-center gap-2">
           {onRefresh && (
             <button
               type="button"
               onClick={onRefresh}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:text-emerald-700"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#baf4ea] hover:text-[#0f766e]"
             >
               <RefreshCw size={14} />
               Refresh
             </button>
           )}
+
           {actionText && actionLink && (
             <Link
               to={actionLink}
-              className="rounded-xl  px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-[#baf4ea] hover:text-[#0f766e]"
             >
               {actionText}
             </Link>
           )}
         </div>
       </div>
-      <div className="p-5">{children}</div>
+
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
 
 export function InfoRow({ label, value }) {
   return (
-    <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+      <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-slate-400">
         {label}
       </p>
-      <p className="mt-0.5 text-sm font-bold text-slate-800">{value}</p>
+      <p className="mt-1 break-words text-[0.86rem] font-bold text-slate-900">
+        {value}
+      </p>
     </div>
   );
 }
 
 export function EmptyState({ text, actionText, actionLink }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
-      <Stethoscope className="mx-auto text-slate-300" size={40} />
-      <p className="mt-4 font-bold text-slate-600">{text}</p>
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-7 text-center">
+      <Stethoscope className="mx-auto text-slate-400" size={30} />
+      <p className="mt-3 text-sm font-semibold text-slate-500">{text}</p>
       {actionText && actionLink && (
         <Link
           to={actionLink}
-          className="mt-4 inline-block rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-bold text-white"
+          className="mt-4 inline-flex rounded-xl bg-[#13c8b4] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#0fb3a1]"
+          style={{ color: "#ffffff" }}
         >
           {actionText}
         </Link>
@@ -167,10 +190,12 @@ export function EmptyState({ text, actionText, actionLink }) {
 export function LoadingScreen({ message }) {
   return (
     <div className="grid min-h-[70vh] place-items-center px-6">
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-xl">
-        <Loader2 className="mx-auto animate-spin text-emerald-600" size={48} />
-        <p className="mt-6 text-lg font-black text-slate-900">{message}</p>
-        <p className="mt-2 text-sm text-slate-500">Loading from MongoDB API…</p>
+      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+        <Loader2 className="mx-auto animate-spin text-[#13c8b4]" size={42} />
+        <p className="mt-6 text-lg font-bold text-slate-900">{message}</p>
+        <p className="mt-2 text-sm font-medium text-slate-500">
+          Loading from MongoDB API…
+        </p>
       </div>
     </div>
   );
@@ -183,8 +208,10 @@ export function ErrorScreen({ title, message, onRetry, retryLabel = "Try again" 
         <div className="flex items-start gap-4">
           <AlertCircle className="shrink-0 text-red-600" size={28} />
           <div>
-            <h1 className="text-xl font-black text-red-900">{title}</h1>
-            <p className="mt-2 text-sm leading-6 text-red-800">{message}</p>
+            <h1 className="text-xl font-bold text-red-900">{title}</h1>
+            <p className="mt-2 text-sm font-medium leading-6 text-red-800">
+              {message}
+            </p>
             {onRetry && (
               <button
                 type="button"
@@ -205,9 +232,9 @@ export function ErrorScreen({ title, message, onRetry, retryLabel = "Try again" 
 export function RecordCard({ children, className = "" }) {
   return (
     <motion.article
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:border-emerald-100 hover:shadow-md ${className}`}
+      className={`rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm transition hover:border-[#baf4ea] hover:bg-white hover:shadow-md ${className}`}
     >
       {children}
     </motion.article>

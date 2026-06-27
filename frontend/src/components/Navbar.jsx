@@ -24,8 +24,14 @@ function Navbar() {
   const userMobileDropdownRef = useRef(null);
 
   const navItems = useMemo(() => {
-    const dashboardPath = user?.role ? getDashboardPath(user.role) : "/login";
-    return [...baseNavItems, { label: "Dashboard", path: dashboardPath }];
+    if (!user?.email) {
+      return baseNavItems;
+    }
+
+    return [
+      ...baseNavItems,
+      { label: "Dashboard", path: getDashboardPath(user.role) },
+    ];
   }, [user]);
 
   const closeMenu = () => {
@@ -113,7 +119,7 @@ function Navbar() {
           </p>
         </Link>
 
-        <div className="hidden items-center gap-1 rounded-full border border-teal-300/20 bg-[#092f2e]/70 px-2 py-1.5 shadow-inner backdrop-blur-md lg:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
@@ -122,17 +128,16 @@ function Navbar() {
                 color: isActive ? "#03151f" : "rgba(255,255,255,0.94)",
               })}
               className={({ isActive }) =>
-                `rounded-full px-5 py-2 text-sm transition-all duration-300 ${
+                `rounded-full px-4 py-2 text-sm transition-all duration-300 ${
                   isActive
-                    ? "bg-teal-400 shadow-[0_10px_24px_rgba(45,212,191,0.25)] font-black"
-                    : "font-black hover:bg-teal-900/70"
+                    ? "bg-teal-400 shadow-[0_10px_24px_rgba(45,212,191,0.22)] font-black"
+                    : "font-black hover:bg-white/[0.06] hover:text-teal-200"
                 }`
               }
             >
               {item.label}
             </NavLink>
           ))}
-
         </div>
 
         <div className="hidden items-center gap-4 lg:flex">
