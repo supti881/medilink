@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router";
 import {
   CalendarDays,
   Camera,
-  CheckCircle2,
   Droplets,
   Eye,
   EyeOff,
@@ -14,7 +13,6 @@ import {
   Mail,
   MapPin,
   Phone,
-  ShieldCheck,
   User,
   UserRound,
   Users,
@@ -209,30 +207,20 @@ function Register() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f3f6fa] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[#f3f6fa] px-4 py-6 text-slate-900 sm:px-6 sm:py-8 lg:px-8">
       <section className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#baf4ea] bg-[#e6fbf7] px-3 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.13em] text-[#0f766e]">
-            <ShieldCheck size={13} />
-            MediLink Registration
-          </div>
-
-          <h1 className="mt-3 text-[1.55rem] font-bold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.9rem]">
+          <h1 className="text-[1.55rem] font-bold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.9rem]">
             Create your MediLink account
           </h1>
 
-          <p className="mx-auto mt-1.5 max-w-2xl text-sm font-medium leading-6 text-slate-600">
+          <p className="mx-auto mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600">
             Register once to access patient, doctor, appointment, prescription,
             payment, and support workflows from the correct portal.
           </p>
         </div>
 
-        <div className="mx-auto mt-6 grid max-w-6xl gap-4 lg:grid-cols-[0.86fr_1.14fr]">
-          <aside className="space-y-4">
-            <InfoPanel />
-            <RegistrationSteps />
-          </aside>
-
+        <div className="mx-auto mt-6 max-w-3xl">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 px-4 py-3.5 sm:px-5">
               <h2 className="text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
@@ -430,87 +418,6 @@ function Register() {
         </div>
       </section>
     </main>
-  );
-}
-
-function InfoPanel() {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
-          <ShieldCheck size={18} />
-        </span>
-        <div>
-          <h2 className="text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
-            Secure Role Registration
-          </h2>
-          <p className="mt-1 text-sm font-medium leading-6 text-slate-600">
-            Create a patient or doctor account with required contact details and
-            secure OTP verification.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3">
-        <MiniFeature
-          icon={<UserRound size={16} />}
-          title="Complete patient profile"
-          text="Patient accounts include gender, date of birth, blood group, address, and emergency contacts."
-        />
-        <MiniFeature
-          icon={<Camera size={16} />}
-          title="Optional profile photo"
-          text="Profile photo can be added during registration or uploaded later from the dashboard."
-        />
-        <MiniFeature
-          icon={<ShieldCheck size={16} />}
-          title="OTP verification enabled"
-          text="After registration, users verify their account before accessing the dashboard."
-        />
-      </div>
-    </section>
-  );
-}
-
-function RegistrationSteps() {
-  return (
-    <section className="rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-4 shadow-sm">
-      <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-[#0f766e]">
-        Registration Flow
-      </p>
-      <div className="mt-3 grid gap-2.5">
-        {[
-          "Fill account details",
-          "Add patient health profile if needed",
-          "Verify OTP to activate account",
-        ].map((item, index) => (
-          <div key={item} className="flex items-center gap-3 text-sm font-medium text-slate-700">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white text-[0.75rem] font-bold text-[#0f766e] ring-1 ring-[#baf4ea]">
-              {index + 1}
-            </span>
-            {item}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function MiniFeature({ icon, title, text }) {
-  return (
-    <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
-      <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#0f766e] ring-1 ring-slate-200">
-          {icon}
-        </span>
-        <div>
-          <h3 className="text-[0.86rem] font-bold text-slate-950">{title}</h3>
-          <p className="mt-1 text-[0.78rem] font-medium leading-6 text-slate-600">
-            {text}
-          </p>
-        </div>
-      </div>
-    </article>
   );
 }
 

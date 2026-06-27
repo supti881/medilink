@@ -5,7 +5,6 @@ import {
   Activity,
   ArrowLeft,
   BadgeCheck,
-  Bot,
   CalendarDays,
   CreditCard,
   Database,
@@ -122,12 +121,6 @@ function getNavItems(role) {
   to: "/patient-dashboard#medical-history",
   icon: Database,
 },
-{
-  label: "AI Assistant",
-  to: "/patient-dashboard#ai-assistant",
-  icon: Bot,
-},
-{ label: "Payments", to: "/mock-payment", icon: CreditCard },
     { label: "Support", to: "/support-ticket", icon: Headphones },
     { label: "Verify RX", to: "/verify-prescription", icon: ShieldCheck },
   ];
@@ -561,3 +554,4 @@ export default function DashboardLayout({
     </>
   );
 }
+

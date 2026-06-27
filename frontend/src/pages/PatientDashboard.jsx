@@ -231,6 +231,69 @@ function getAppointmentTimeRange(appointment) {
   return `${appointment?.startTime || "—"} – ${appointment?.endTime || "—"}`;
 }
 
+function normalizePaymentStatus(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getAppointmentFee(appointment = {}) {
+  return Number(
+    appointment?.consultationFee ||
+      appointment?.doctor?.consultationFee ||
+      appointment?.amount ||
+      appointment?.fee ||
+      0
+  );
+}
+
+function getPaymentAppointmentId(payment = {}) {
+  const appointmentRef =
+    payment?.appointment ||
+    payment?.appointmentId ||
+    payment?.appointment_id ||
+    payment?.booking ||
+    "";
+
+  if (appointmentRef && typeof appointmentRef === "object") {
+    return appointmentRef._id || appointmentRef.id || "";
+  }
+
+  return appointmentRef || "";
+}
+
+function getAppointmentPayment(appointment = {}, payments = []) {
+  const appointmentId = String(appointment?._id || appointment?.id || "");
+
+  if (!appointmentId) return null;
+
+  return payments.find((payment) => {
+    const paymentAppointmentId = String(getPaymentAppointmentId(payment) || "");
+    return paymentAppointmentId && paymentAppointmentId === appointmentId;
+  });
+}
+
+function isAppointmentPaid(appointment = {}, payment = null) {
+  const status = normalizePaymentStatus(
+    payment?.paymentStatus ||
+      payment?.status ||
+      appointment?.paymentStatus ||
+      appointment?.payment?.paymentStatus ||
+      appointment?.payment?.status ||
+      ""
+  );
+
+  return ["paid", "completed", "success", "successful"].includes(status);
+}
+
+function canPayForAppointment(appointment = {}, payment = null) {
+  const status = String(appointment?.status || "").trim().toLowerCase();
+
+  if (["cancelled", "rejected", "completed"].includes(status)) {
+    return false;
+  }
+
+  return !isAppointmentPaid(appointment, payment) && getAppointmentFee(appointment) > 0;
+}
+
 function getAppointmentShareLabel(appointment) {
   if (!appointment || typeof appointment === "string") {
     return "General medical history";
@@ -596,7 +659,7 @@ function ProfileAvatar({ src, name, editable = false }) {
 
   if (imageUrl && !imageFailed) {
     return (
-      <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-[28px] border border-white bg-white shadow-lg ring-4 ring-emerald-100">
+      <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-white bg-white shadow-lg ring-4 ring-teal-100">
         <img
           src={imageUrl}
           alt={name || "Patient profile"}
@@ -614,7 +677,7 @@ function ProfileAvatar({ src, name, editable = false }) {
   }
 
   return (
-    <div className="grid h-28 w-28 shrink-0 place-items-center rounded-[28px] border border-white bg-gradient-to-br from-emerald-400 to-cyan-400 text-3xl font-black text-slate-950 shadow-lg ring-4 ring-emerald-100">
+    <div className="grid h-28 w-28 shrink-0 place-items-center rounded-2xl border border-white bg-gradient-to-br from-teal-400 to-cyan-400 text-3xl font-black text-slate-950 shadow-lg ring-4 ring-teal-100">
       {initial}
     </div>
   );
@@ -644,6 +707,9 @@ function PatientDashboard() {
   const [error, setError] = useState("");
   const [lastSynced, setLastSynced] = useState(null);
   const [bookDoctor, setBookDoctor] = useState(null);
+  const [paymentSubmittingId, setPaymentSubmittingId] = useState("");
+  const [paymentFeedback, setPaymentFeedback] = useState("");
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
 
   const activeLayout = useMemo(() => {
     const hash = location.hash.replace("#", "");
@@ -653,9 +719,7 @@ function PatientDashboard() {
         "profile",
         "appointments",
         "doctors",
-        "payments",
         "medical-history",
-        "ai-assistant",
         "support",
         "verify-rx",
       ].includes(hash)
@@ -920,6 +984,40 @@ function PatientDashboard() {
     }
   };
 
+  const handleAppointmentPayment = async (appointment) => {
+    if (!appointment?._id) {
+      setError("Appointment ID is missing. Please refresh and try again.");
+      return;
+    }
+
+    const amount = getAppointmentFee(appointment);
+
+    if (!amount) {
+      setError("Consultation fee is missing for this appointment.");
+      return;
+    }
+
+    try {
+      setPaymentSubmittingId(appointment._id);
+      setPaymentFeedback("");
+      setError("");
+
+      await paymentApi.createMockPayment({
+        appointment: appointment._id,
+        amount,
+        paymentMethod: "mock",
+        transactionId: `ML-DASH-${Date.now()}`,
+      });
+
+      setPaymentFeedback("Payment completed and saved for this appointment.");
+      await fetchDashboardData(true);
+    } catch (err) {
+      setError(err.message || "Payment failed. Please try again.");
+    } finally {
+      setPaymentSubmittingId("");
+    }
+  };
+
   const handleMedicalRecordUpload = async (payload) => {
     try {
       await medicalRecordApi.upload(payload);
@@ -960,7 +1058,7 @@ function PatientDashboard() {
     <>
       <DashboardLayout
         title={`Hello, ${user?.name?.split(" ")[0] || "Patient"}`}
-        subtitle="Live data from MediLink API & MongoDB"
+        subtitle="Manage appointments, prescriptions, payments, medical records and support"
         role="patient"
         user={user}
         onRefresh={() => fetchDashboardData(true)}
@@ -1015,6 +1113,10 @@ function PatientDashboard() {
         {activeLayout === "appointments" && (
           <AppointmentsLayout
             appointments={appointments}
+            payments={payments}
+            paymentSubmittingId={paymentSubmittingId}
+            paymentFeedback={paymentFeedback}
+            onPayAppointment={handleAppointmentPayment}
             onCancel={handleCancel}
             onRefresh={() => fetchDashboardData(true)}
           />
@@ -1027,7 +1129,6 @@ function PatientDashboard() {
           />
         )}
 
-        {activeLayout === "payments" && <PaymentsLayout payments={payments} />}
 
         {activeLayout === "medical-history" && (
           <MedicalHistoryLayout
@@ -1037,10 +1138,6 @@ function PatientDashboard() {
             onArchive={handleMedicalRecordArchive}
             onRefresh={() => fetchDashboardData(true)}
           />
-        )}
-
-        {activeLayout === "ai-assistant" && (
-          <PatientAiAssistantLayout user={user} />
         )}
 
         {activeLayout === "support" && <SupportLayout tickets={tickets} />}
@@ -1057,7 +1154,41 @@ function PatientDashboard() {
         onClose={() => setBookDoctor(null)}
         onSuccess={() => fetchDashboardData(true)}
       />
+
+      <PatientAiAssistantLauncher
+        open={aiAssistantOpen}
+        user={user}
+        onOpen={() => setAiAssistantOpen(true)}
+        onClose={() => setAiAssistantOpen(false)}
+      />
     </>
+  );
+}
+
+
+function PatientSignalCard({ icon, title, text, tone = "slate" }) {
+  const tones = {
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    red: "border-red-200 bg-red-50 text-red-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+    teal: "border-[#baf4ea] bg-[#e6fbf7] text-[#0f766e]",
+    cyan: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  };
+
+  return (
+    <article className={`rounded-2xl border px-4 py-3 ${tones[tone] || tones.slate}`}>
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/70 shadow-sm">
+          {icon}
+        </span>
+        <div>
+          <h3 className="text-sm font-bold">{title}</h3>
+          <p className="mt-1 text-[0.78rem] font-medium leading-5 opacity-90">
+            {text}
+          </p>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -1075,8 +1206,48 @@ function OverviewLayout({
   const latestPrescriptions = prescriptions.slice(0, 3);
 
   return (
-    <section id="overview" className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <section id="overview" className="space-y-4">
+      <DataPanel
+        title="Patient Notifications"
+        subtitle="Live reminders from appointment, prescription and support data"
+      >
+        <div className="grid gap-3 lg:grid-cols-2">
+          <PatientSignalCard
+            icon={<CalendarDays size={16} />}
+            tone={pendingAppointments.length ? "amber" : "teal"}
+            title={
+              pendingAppointments.length
+                ? `${pendingAppointments.length} appointment request${pendingAppointments.length === 1 ? "" : "s"} pending`
+                : "Appointments are up to date"
+            }
+            text={
+              pendingAppointments.length
+                ? "Wait for doctor/admin approval before joining consultation."
+                : "No pending appointment request is waiting right now."
+            }
+          />
+
+          <PatientSignalCard
+            icon={<FileText size={16} />}
+            tone="teal"
+            title={`${prescriptions.length} prescription record${prescriptions.length === 1 ? "" : "s"}`}
+            text="Download prescriptions or verify RX token from your patient workspace."
+          />
+
+          <PatientSignalCard
+            icon={<Headphones size={16} />}
+            tone={activeTickets.length ? "red" : "slate"}
+            title={
+              activeTickets.length
+                ? `${activeTickets.length} support ticket${activeTickets.length === 1 ? "" : "s"} active`
+                : "No active support ticket"
+            }
+            text="Track support replies and updates from the support section."
+          />
+        </div>
+      </DataPanel>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={<CalendarDays size={20} />}
           label="Appointments"
@@ -1116,7 +1287,7 @@ function OverviewLayout({
 
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <DataPanel
           title="Recent appointments"
           subtitle={`${latestAppointments.length} latest records`}
@@ -1141,7 +1312,7 @@ function OverviewLayout({
                             appointment.doctor?.user?.name
                         )}
                       </p>
-                      <p className="text-sm font-semibold text-emerald-700">
+                      <p className="text-sm font-semibold text-teal-700">
                         {appointment.doctor?.specialization || "Consultation"}
                       </p>
                     </div>
@@ -1177,7 +1348,7 @@ function OverviewLayout({
                       <p className="font-black text-slate-950">
                         {rx.diagnosis || "Prescription"}
                       </p>
-                      <p className="mt-1 font-mono text-xs font-bold text-emerald-700">
+                      <p className="mt-1 font-mono text-xs font-bold text-teal-700">
                         {rx.verificationToken || "No token"}
                       </p>
                     </div>
@@ -1188,7 +1359,7 @@ function OverviewLayout({
                   <button
                     type="button"
                     onClick={() => printPrescription(rx)}
-                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                    className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-black text-teal-700 transition hover:border-teal-300 hover:bg-teal-100"
                   >
                     <Download size={15} />
                     Download
@@ -1228,7 +1399,7 @@ function ProfileLayout({
       >
         <div className="space-y-6">
           {profileMessage && (
-            <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800">
+            <div className="flex items-center gap-3 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-black text-teal-800">
               <CheckCircle2 size={18} />
               {profileMessage}
             </div>
@@ -1267,7 +1438,7 @@ function ProfileLayout({
 function ProfileView({ user, profileForm, onStartEdit }) {
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-[30px] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-cyan-50 to-white p-6">
+      <div className="overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 via-cyan-50 to-white p-6">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <ProfileAvatar
@@ -1276,7 +1447,7 @@ function ProfileView({ user, profileForm, onStartEdit }) {
             />
 
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-700">
+              <p className="text-xs font-black uppercase tracking-[0.28em] text-teal-700">
                 Patient Profile
               </p>
 
@@ -1285,7 +1456,7 @@ function ProfileView({ user, profileForm, onStartEdit }) {
               </h2>
 
               <p className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-600">
-                <Mail size={16} className="text-emerald-600" />
+                <Mail size={16} className="text-teal-600" />
                 {user?.email || "No email found"}
               </p>
             </div>
@@ -1294,7 +1465,7 @@ function ProfileView({ user, profileForm, onStartEdit }) {
           <button
             type="button"
             onClick={onStartEdit}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/10 transition hover:bg-emerald-700"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/10 transition hover:bg-teal-700"
           >
             <UserRound size={17} />
             Edit Profile
@@ -1351,9 +1522,9 @@ function ProfileView({ user, profileForm, onStartEdit }) {
         />
       </div>
 
-      <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-teal-50 text-teal-700">
             <FileText size={20} />
           </div>
 
@@ -1371,8 +1542,8 @@ function ProfileView({ user, profileForm, onStartEdit }) {
 
 function ProfileInfoCard({ icon, label, value }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-teal-50 text-teal-700">
         {icon}
       </div>
 
@@ -1399,7 +1570,7 @@ function ProfileEditForm({
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-      <div className="rounded-[30px] border border-emerald-100 bg-gradient-to-br from-emerald-50 to-cyan-50 p-6">
+      <div className="rounded-2xl border border-teal-100 bg-gradient-to-br from-teal-50 to-cyan-50 p-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
           <label className="group relative cursor-pointer">
             <ProfileAvatar
@@ -1408,7 +1579,7 @@ function ProfileEditForm({
               editable
             />
 
-            <span className="absolute inset-0 grid place-items-center rounded-[28px] bg-slate-950/55 text-white opacity-0 transition group-hover:opacity-100">
+            <span className="absolute inset-0 grid place-items-center rounded-2xl bg-slate-950/55 text-white opacity-0 transition group-hover:opacity-100">
               {photoUploading ? (
                 <Loader2 size={26} className="animate-spin" />
               ) : (
@@ -1430,7 +1601,7 @@ function ProfileEditForm({
               {profileForm.name || "Patient Name"}
             </h2>
 
-            <p className="mt-1 text-sm font-bold text-emerald-700">
+            <p className="mt-1 text-sm font-bold text-teal-700">
               {user?.email || "No email found"}
             </p>
 
@@ -1537,7 +1708,8 @@ function ProfileEditForm({
         <button
           type="submit"
           disabled={profileSaving || photoUploading}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          style={{ color: "#ffffff" }}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#0fb3a1] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {profileSaving ? (
             <Loader2 size={17} className="animate-spin" />
@@ -1546,7 +1718,6 @@ function ProfileEditForm({
           )}
           {profileSaving ? "Saving profile..." : "Save Changes"}
         </button>
-
         <button
           type="button"
           onClick={onCancelEdit}
@@ -1560,14 +1731,28 @@ function ProfileEditForm({
   );
 }
 
-function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
+function AppointmentsLayout({
+  appointments,
+  payments = [],
+  paymentSubmittingId = "",
+  paymentFeedback = "",
+  onPayAppointment,
+  onCancel,
+  onRefresh,
+}) {
   return (
     <section id="appointments" className="scroll-mt-6">
       <DataPanel
         title="My Appointments"
-        subtitle={`${appointments.length} appointment records`}
+        subtitle={`${appointments.length} appointment records with payment action`}
         onRefresh={onRefresh}
       >
+        {paymentFeedback && (
+          <div className="mb-4 rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] px-4 py-3 text-sm font-bold text-[#0f766e]">
+            {paymentFeedback}
+          </div>
+        )}
+
         {appointments.length === 0 ? (
           <EmptyState
             text="No appointment booked yet."
@@ -1581,6 +1766,16 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                 appointment.doctor?.fullName || appointment.doctor?.user?.name
               );
               const joinState = getJoinState(appointment);
+              const appointmentPayment = getAppointmentPayment(appointment, payments);
+              const isPaid = isAppointmentPaid(appointment, appointmentPayment);
+              const canPay = canPayForAppointment(appointment, appointmentPayment);
+              const appointmentFee = getAppointmentFee(appointment);
+              const payingThisAppointment = paymentSubmittingId === appointment._id;
+              const transactionId =
+                appointmentPayment?.transactionId ||
+                appointmentPayment?.transaction_id ||
+                appointmentPayment?.reference ||
+                "Not added";
 
               return (
                 <RecordCard key={appointment._id}>
@@ -1590,7 +1785,7 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                         {doctorName}
                       </p>
 
-                      <p className="mt-1 text-sm font-bold text-emerald-700">
+                      <p className="mt-1 text-sm font-bold text-teal-700">
                         {appointment.doctor?.specialization ||
                           appointment.doctor?.department ||
                           "Consultation"}
@@ -1642,6 +1837,53 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                     />
                   </div>
 
+                  <div
+                    className={`mt-4 rounded-2xl border px-4 py-3 ${
+                      isPaid
+                        ? "border-[#baf4ea] bg-[#e6fbf7]"
+                        : canPay
+                        ? "border-amber-200 bg-amber-50"
+                        : "border-slate-200 bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-slate-950">
+                          {isPaid ? "Payment completed" : canPay ? "Payment pending" : "Payment not required"}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-600">
+                          {isPaid
+                            ? `Transaction: ${transactionId}`
+                            : canPay
+                            ? `Consultation fee: ৳${appointmentFee}`
+                            : "This appointment cannot be paid from the current status."}
+                        </p>
+                      </div>
+
+                      {isPaid ? (
+                        <span className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#baf4ea] bg-white px-4 py-2 text-xs font-bold text-[#0f766e]">
+                          <CheckCircle2 size={15} />
+                          Paid
+                        </span>
+                      ) : canPay ? (
+                        <button
+                          type="button"
+                          disabled={payingThisAppointment}
+                          onClick={() => onPayAppointment?.(appointment)}
+                          style={{ color: "#ffffff" }}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#0fb3a1] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {payingThisAppointment ? (
+                            <Loader2 size={15} className="animate-spin" />
+                          ) : (
+                            <CreditCard size={15} />
+                          )}
+                          {payingThisAppointment ? "Processing..." : "Pay Now"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
                   {appointment.reason && (
                     <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
@@ -1657,7 +1899,7 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                   <div
                     className={`mt-4 rounded-2xl border px-4 py-3 ${
                       joinState.tone === "emerald"
-                        ? "border-emerald-200 bg-emerald-50"
+                        ? "border-teal-200 bg-teal-50"
                         : joinState.tone === "amber"
                         ? "border-amber-200 bg-amber-50"
                         : joinState.tone === "rose"
@@ -1682,7 +1924,7 @@ function AppointmentsLayout({ appointments, onCancel, onRefresh }) {
                         type="button"
                         disabled={!joinState.canJoin}
                         onClick={() => openMeetingLink(joinState.meetingLink)}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
                       >
                         <ExternalLink size={15} />
                         Join
@@ -1730,7 +1972,7 @@ function DoctorsLayout({ doctors, onBook }) {
             {activeDoctors.map((doctor) => (
               <RecordCard key={doctor._id}>
                 <div className="flex gap-4">
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-emerald-100">
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-teal-100">
                     {doctor.imageUrl ||
                     doctor.profileImage ||
                     doctor.user?.profileImage ? (
@@ -1744,7 +1986,7 @@ function DoctorsLayout({ doctors, onBook }) {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-lg font-black text-emerald-700">
+                      <div className="grid h-full w-full place-items-center text-lg font-black text-teal-700">
                         {doctor.fullName?.charAt(0)?.toUpperCase() || "D"}
                       </div>
                     )}
@@ -1757,7 +1999,7 @@ function DoctorsLayout({ doctors, onBook }) {
                       )}
                     </p>
 
-                    <p className="mt-1 text-sm font-bold text-emerald-700">
+                    <p className="mt-1 text-sm font-bold text-teal-700">
                       {doctor.specialization || "General Physician"}
                     </p>
 
@@ -1783,7 +2025,7 @@ function DoctorsLayout({ doctors, onBook }) {
                 <button
                   type="button"
                   onClick={() => onBook(doctor)}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-teal-700"
                 >
                   <CalendarDays size={17} />
                   Book Appointment
@@ -1813,7 +2055,7 @@ function PaymentsLayout({ payments }) {
                       {payment.reason || payment.paymentFor || "Payment"}
                     </p>
 
-                    <p className="mt-1 text-sm font-bold text-emerald-700">
+                    <p className="mt-1 text-sm font-bold text-teal-700">
                       ৳{payment.amount || 0}
                     </p>
                   </div>
@@ -1952,7 +2194,7 @@ function MedicalHistoryLayout({
       >
         <form onSubmit={handleSubmit} className="space-y-5">
           {message && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800">
+            <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-black text-teal-800">
               {message}
             </div>
           )}
@@ -2017,10 +2259,10 @@ function MedicalHistoryLayout({
               className="lg:col-span-2"
             />
 
-            <label className="block rounded-[24px] border border-dashed border-emerald-300 bg-emerald-50/60 p-5 transition hover:border-emerald-500 hover:bg-emerald-50 lg:col-span-2">
+            <label className="block rounded-2xl border border-dashed border-teal-300 bg-teal-50/60 p-5 transition hover:border-teal-500 hover:bg-teal-50 lg:col-span-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-emerald-700 shadow-sm">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-teal-700 shadow-sm">
                     <UploadCloud size={22} />
                   </div>
 
@@ -2034,7 +2276,7 @@ function MedicalHistoryLayout({
                     </p>
 
                     {form.file && (
-                      <p className="mt-2 text-sm font-black text-emerald-700">
+                      <p className="mt-2 text-sm font-black text-teal-700">
                         Selected: {form.file.name}
                       </p>
                     )}
@@ -2058,7 +2300,7 @@ function MedicalHistoryLayout({
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
               <Loader2 size={17} className="animate-spin" />
@@ -2089,7 +2331,7 @@ function MedicalHistoryLayout({
                         {record.title}
                       </p>
 
-                      <p className="mt-1 text-sm font-bold text-emerald-700">
+                      <p className="mt-1 text-sm font-bold text-teal-700">
                         {getMedicalRecordCategoryLabel(record.category)}
                       </p>
                     </div>
@@ -2106,7 +2348,7 @@ function MedicalHistoryLayout({
                   <div
                     className={`mt-4 rounded-2xl border px-4 py-3 ${
                       shareInfo.tone === "emerald"
-                        ? "border-emerald-200 bg-emerald-50"
+                        ? "border-teal-200 bg-teal-50"
                         : shareInfo.tone === "cyan"
                         ? "border-cyan-200 bg-cyan-50"
                         : "border-slate-200 bg-slate-50"
@@ -2159,7 +2401,7 @@ function MedicalHistoryLayout({
                     <button
                       type="button"
                       onClick={() => openMedicalRecordFile(record.fileUrl)}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-teal-700"
                     >
                       <ExternalLink size={15} />
                       View
@@ -2168,7 +2410,7 @@ function MedicalHistoryLayout({
                     <a
                       href={getMediaUrl(record.fileUrl)}
                       download={record.originalName || record.title}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-black text-teal-700 transition hover:bg-teal-100"
                     >
                       <Download size={15} />
                       Download
@@ -2193,7 +2435,66 @@ function MedicalHistoryLayout({
   );
 }
 
-function PatientAiAssistantLayout({ user }) {
+function PatientAiAssistantLauncher({ open, user, onOpen, onClose }) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="fixed bottom-6 right-6 z-[70] inline-flex items-center gap-3 rounded-2xl border border-[#baf4ea] bg-[#13c8b4] px-4 py-3 text-sm font-bold text-white shadow-2xl shadow-teal-900/20 transition hover:-translate-y-0.5 hover:bg-[#0fb3a1]"
+        style={{ color: "#ffffff" }}
+        aria-label="Open MediLink AI assistant"
+      >
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15">
+          <HeartPulse size={18} />
+        </span>
+        <span className="hidden text-left sm:block">
+          <span className="block text-[0.68rem] uppercase tracking-[0.14em] text-white/75">
+            AI Assistant
+          </span>
+          <span className="block leading-tight">Health Chat</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-end bg-slate-950/45 p-3 backdrop-blur-sm sm:p-5">
+          <div className="h-[86vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
+                  <HeartPulse size={19} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-950">
+                    MediLink AI Assistant
+                  </p>
+                  <p className="text-xs font-medium text-slate-500">
+                    Chat style support · safe guidance only
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                aria-label="Close MediLink AI assistant"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="h-[calc(86vh-4.2rem)] overflow-y-auto bg-slate-50 p-3 sm:p-5">
+              <PatientAiAssistantLayout user={user} embedded />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function PatientAiAssistantLayout({ user, embedded = false }) {
   const [form, setForm] = useState({
     symptoms: "",
     duration: "",
@@ -2204,8 +2505,14 @@ function PatientAiAssistantLayout({ user }) {
     extraNotes: "",
   });
 
-  const [answer, setAnswer] = useState("");
-  const [disclaimer, setDisclaimer] = useState("");
+  const [messages, setMessages] = useState([
+    {
+      id: "welcome",
+      role: "assistant",
+      text:
+        "Hi, I am your MediLink AI assistant. Describe your symptoms, duration, age, and important medical history. I will give safe guidance before you book a doctor.",
+    },
+  ]);
   const [loading, setLoading] = useState(false);
   const [aiError, setAiError] = useState("");
 
@@ -2218,6 +2525,44 @@ function PatientAiAssistantLayout({ user }) {
     }));
   };
 
+  const resetChat = () => {
+    setForm((previousForm) => ({
+      ...previousForm,
+      symptoms: "",
+      duration: "",
+      existingConditions: "",
+      currentMedicines: "",
+      extraNotes: "",
+    }));
+    setAiError("");
+    setMessages([
+      {
+        id: "welcome",
+        role: "assistant",
+        text:
+          "Hi, I am your MediLink AI assistant. Describe your symptoms, duration, age, and important medical history. I will give safe guidance before you book a doctor.",
+      },
+    ]);
+  };
+
+  const buildUserMessage = () => {
+    const parts = [
+      form.symptoms.trim(),
+      form.duration.trim() ? `Duration: ${form.duration.trim()}` : "",
+      form.age.trim() ? `Age: ${form.age.trim()}` : "",
+      form.gender ? `Gender: ${form.gender}` : "",
+      form.currentMedicines.trim()
+        ? `Current medicines: ${form.currentMedicines.trim()}`
+        : "",
+      form.existingConditions.trim()
+        ? `Existing conditions: ${form.existingConditions.trim()}`
+        : "",
+      form.extraNotes.trim() ? `Extra notes: ${form.extraNotes.trim()}` : "",
+    ].filter(Boolean);
+
+    return parts.join("\n");
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -2226,11 +2571,21 @@ function PatientAiAssistantLayout({ user }) {
       return;
     }
 
+    const userMessage = buildUserMessage();
+    const userMessageId = `user-${Date.now()}`;
+
+    setMessages((previousMessages) => [
+      ...previousMessages,
+      {
+        id: userMessageId,
+        role: "user",
+        text: userMessage,
+      },
+    ]);
+
     try {
       setLoading(true);
       setAiError("");
-      setAnswer("");
-      setDisclaimer("");
 
       const response = await aiApi.patientSymptoms({
         symptoms: form.symptoms,
@@ -2242,151 +2597,260 @@ function PatientAiAssistantLayout({ user }) {
         extraNotes: form.extraNotes,
       });
 
-      setAnswer(response.answer || "AI could not generate guidance right now.");
-      setDisclaimer(response.disclaimer || "");
+      const answer = response.answer || "AI could not generate guidance right now.";
+      const disclaimer = response.disclaimer
+        ? `\n\nSafety note: ${response.disclaimer}`
+        : "";
+
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          text: `${answer}${disclaimer}`,
+        },
+      ]);
+
+      setForm((previousForm) => ({
+        ...previousForm,
+        symptoms: "",
+        extraNotes: "",
+      }));
     } catch (error) {
-      setAiError(error.message || "AI assistant failed. Please try again.");
+      const errorMessage =
+        error.message || "AI assistant failed. Please try again.";
+
+      setAiError(errorMessage);
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        {
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          isError: true,
+          text:
+            "I could not generate guidance right now because the AI service is not connected correctly. Please check the backend AI credential/configuration and try again.",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <section id="ai-assistant" className="scroll-mt-6 space-y-6">
-      <DataPanel
-        title="Patient AI Assistant"
-        subtitle="Describe symptoms and get safe guidance before booking a doctor"
-      >
-        <div className="mb-5 rounded-[26px] border border-amber-200 bg-amber-50 px-5 py-4">
-          <p className="text-sm font-black text-amber-900">Safety Notice</p>
-          <p className="mt-1 text-sm font-semibold leading-6 text-amber-800">
-            This AI assistant cannot diagnose disease or prescribe medicine.
-            For serious symptoms like chest pain, breathing difficulty,
-            fainting, heavy bleeding, severe allergic reaction, or stroke signs,
-            seek emergency care immediately.
-          </p>
-        </div>
+  const assistantContent = (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+            <div className="border-b border-slate-200 bg-white px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
+                    <HeartPulse size={19} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-950">
+                      MediLink Health Chat
+                    </p>
+                    <p className="text-xs font-medium text-slate-500">
+                      Safe guidance only · not a medical diagnosis
+                    </p>
+                  </div>
+                </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {aiError && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
-              {aiError}
+                <button
+                  type="button"
+                  onClick={resetChat}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#baf4ea] hover:text-[#0f766e]"
+                >
+                  Clear Chat
+                </button>
+              </div>
             </div>
-          )}
 
-          <TextAreaField
-            label="Symptoms"
-            name="symptoms"
-            value={form.symptoms}
-            onChange={handleChange}
-            placeholder="Example: Fever, headache, cough, chest pain, stomach pain..."
-          />
+            <div className="max-h-[30rem] min-h-[22rem] space-y-4 overflow-y-auto px-4 py-5">
+              {messages.map((message) => {
+                const isUser = message.role === "user";
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <FormField
-              label="Duration"
-              name="duration"
-              value={form.duration}
-              onChange={handleChange}
-              placeholder="Example: 2 days / 1 week"
-            />
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+                  >
+                    {!isUser && (
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e] shadow-sm">
+                        <HeartPulse size={17} />
+                      </div>
+                    )}
 
-            <FormField
-              label="Age"
-              name="age"
-              value={form.age}
-              onChange={handleChange}
-              placeholder="Example: 25"
-            />
+                    <div
+                      className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm font-medium leading-6 shadow-sm ${
+                        isUser
+                          ? "bg-[#13c8b4] text-white"
+                          : message.isError
+                            ? "border border-red-200 bg-red-50 text-red-700"
+                            : "border border-slate-200 bg-white text-slate-700"
+                      }`}
+                      style={isUser ? { color: "#ffffff" } : undefined}
+                    >
+                      <p className="whitespace-pre-line">{message.text}</p>
+                    </div>
 
-            <SelectField
-              label="Gender"
-              name="gender"
-              value={form.gender}
-              onChange={handleChange}
-              options={[
-                ["", "Select gender"],
-                ["male", "Male"],
-                ["female", "Female"],
-                ["other", "Other"],
-              ]}
-            />
+                    {isUser && (
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-900 text-white shadow-sm">
+                        <UserRound size={17} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
-            <FormField
-              label="Current Medicines"
-              name="currentMedicines"
-              value={form.currentMedicines}
-              onChange={handleChange}
-              placeholder="Example: Paracetamol, insulin, BP medicine"
-            />
+              {loading && (
+                <div className="flex justify-start gap-3">
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e] shadow-sm">
+                    <HeartPulse size={17} />
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-sm">
+                    <Loader2 size={16} className="animate-spin" />
+                    Checking symptoms...
+                  </div>
+                </div>
+              )}
+            </div>
 
-            <TextAreaField
-              label="Existing Conditions"
-              name="existingConditions"
-              value={form.existingConditions}
-              onChange={handleChange}
-              placeholder="Example: Diabetes, asthma, high blood pressure"
-              className="lg:col-span-2"
-            />
+            {aiError && (
+              <div className="border-t border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                {aiError}
+              </div>
+            )}
 
-            <TextAreaField
-              label="Extra Notes"
-              name="extraNotes"
-              value={form.extraNotes}
-              onChange={handleChange}
-              placeholder="Any additional information"
-              className="lg:col-span-2"
-            />
+            <form onSubmit={handleSubmit} className="border-t border-slate-200 bg-white p-4">
+              <label className="block">
+                <span className="sr-only">Type symptoms</span>
+                <textarea
+                  name="symptoms"
+                  value={form.symptoms}
+                  onChange={handleChange}
+                  rows={3}
+                  placeholder="Type symptoms here... Example: Fever for 2 days with headache"
+                  className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#13c8b4] focus:bg-white focus:ring-4 focus:ring-[#e6fbf7]"
+                />
+              </label>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-slate-500">
+                  For emergency symptoms, call emergency support immediately.
+                </p>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#0fb3a1] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ color: "#ffffff" }}
+                >
+                  {loading ? (
+                    <Loader2 size={17} className="animate-spin" />
+                  ) : (
+                    <HeartPulse size={17} />
+                  )}
+                  {loading ? "Checking..." : "Send Message"}
+                </button>
+              </div>
+            </form>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? (
-              <Loader2 size={17} className="animate-spin" />
-            ) : (
-              <HeartPulse size={17} />
-            )}
-            {loading ? "AI is checking..." : "Get AI Guidance"}
-          </button>
-        </form>
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+              <p className="text-sm font-black text-amber-900">Safety Notice</p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-amber-800">
+                This assistant cannot diagnose disease or prescribe medicine. For
+                chest pain, breathing difficulty, fainting, heavy bleeding, stroke
+                signs, or severe allergic reaction, seek emergency care.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm font-bold text-slate-950">Health Context</p>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                Optional details help the assistant respond better.
+              </p>
+
+              <div className="mt-4 space-y-3">
+                <FormField
+                  label="Duration"
+                  name="duration"
+                  value={form.duration}
+                  onChange={handleChange}
+                  placeholder="Example: 2 days"
+                />
+
+                <FormField
+                  label="Age"
+                  name="age"
+                  value={form.age}
+                  onChange={handleChange}
+                  placeholder="Example: 29"
+                />
+
+                <SelectField
+                  label="Gender"
+                  name="gender"
+                  value={form.gender}
+                  onChange={handleChange}
+                  options={[
+                    ["", "Select gender"],
+                    ["male", "Male"],
+                    ["female", "Female"],
+                    ["other", "Other"],
+                  ]}
+                />
+
+                <FormField
+                  label="Current Medicines"
+                  name="currentMedicines"
+                  value={form.currentMedicines}
+                  onChange={handleChange}
+                  placeholder="Example: Paracetamol"
+                />
+
+                <TextAreaField
+                  label="Existing Conditions"
+                  name="existingConditions"
+                  value={form.existingConditions}
+                  onChange={handleChange}
+                  placeholder="Diabetes, asthma, blood pressure..."
+                />
+
+                <TextAreaField
+                  label="Extra Notes"
+                  name="extraNotes"
+                  value={form.extraNotes}
+                  onChange={handleChange}
+                  placeholder="Any additional details"
+                />
+              </div>
+            </div>
+
+            <Link
+              to="/patient-dashboard#doctors"
+              style={{ color: "#ffffff" }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#0fb3a1]"
+            >
+              <CalendarDays size={17} />
+              Book Doctor Appointment
+            </Link>
+          </aside>
+        </div>
+  );
+
+  if (embedded) {
+    return assistantContent;
+  }
+
+  return (
+    <section id="ai-assistant" className="scroll-mt-6">
+      <DataPanel
+        title="Patient AI Assistant"
+        subtitle="Chat with MediLink AI for safe guidance before booking a doctor"
+      >
+        {assistantContent}
       </DataPanel>
-
-      {(answer || disclaimer) && (
-        <DataPanel
-          title="AI Guidance"
-          subtitle="Review this guidance and book a doctor if needed"
-        >
-          {answer && (
-            <div className="rounded-[26px] border border-emerald-100 bg-emerald-50 px-5 py-5">
-              <p className="whitespace-pre-line text-sm font-semibold leading-7 text-slate-800">
-                {answer}
-              </p>
-            </div>
-          )}
-
-          {disclaimer && (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                Disclaimer
-              </p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                {disclaimer}
-              </p>
-            </div>
-          )}
-
-          <Link
-           to="/patient-dashboard#doctors"
-           className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
-          >
-           <CalendarDays size={17} />
-            Book Doctor Appointment
-         </Link>
-        </DataPanel>
-      )}
     </section>
   );
 }
@@ -2449,7 +2913,7 @@ function VerifyPrescriptionLayout({ prescriptions }) {
                       {prescription.diagnosis || "Prescription"}
                     </p>
 
-                    <p className="mt-1 text-sm font-bold text-emerald-700">
+                    <p className="mt-1 text-sm font-bold text-teal-700">
                       {getPrescriptionDoctorName(prescription)}
                     </p>
                   </div>
@@ -2496,7 +2960,7 @@ function VerifyPrescriptionLayout({ prescriptions }) {
                 <button
                   type="button"
                   onClick={() => printPrescription(prescription)}
-                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-emerald-700"
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-teal-700"
                 >
                   <Download size={15} />
                   Download
@@ -2531,7 +2995,7 @@ function FormField({
         value={value || ""}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:ring-4 focus:ring-teal-100"
       />
     </label>
   );
@@ -2555,7 +3019,7 @@ function SelectField({
         name={name}
         value={value || ""}
         onChange={onChange}
-        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-teal-400 focus:ring-4 focus:ring-teal-100"
       >
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>
@@ -2587,7 +3051,7 @@ function TextAreaField({
         onChange={onChange}
         placeholder={placeholder}
         rows={4}
-        className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+        className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:ring-4 focus:ring-teal-100"
       />
     </label>
   );
