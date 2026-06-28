@@ -875,6 +875,14 @@ export default function DoctorDashboard() {
       onRefresh={() => fetchDashboardData(true)}
       refreshing={refreshing}
       lastSynced={lastSynced}
+      headerActions={
+        <DoctorNotificationDropdown
+          pendingAppointments={pendingAppointments}
+          todayAppointments={todayAppointments}
+          missingMeetingLinkAppointments={missingMeetingLinkAppointments}
+          pendingPaymentAppointments={pendingPaymentAppointments}
+        />
+      }
     >
       <MessageBox error={error} success={success} />
 
@@ -1070,12 +1078,15 @@ function InfoBlock({ label, value }) {
   );
 }
 
-function NotificationPanel({
+function DoctorNotificationDropdown({
   pendingAppointments = [],
   todayAppointments = [],
   missingMeetingLinkAppointments = [],
   pendingPaymentAppointments = [],
 }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
   const notices = [];
 
   if (pendingAppointments.length > 0) {
@@ -1084,6 +1095,7 @@ function NotificationPanel({
       title: `${pendingAppointments.length} appointment request${pendingAppointments.length > 1 ? "s" : ""} waiting`,
       text: "Review pending patient bookings and approve valid requests.",
       tone: "border-amber-200 bg-amber-50 text-amber-700",
+      target: "/doctor-dashboard#appointments",
     });
   }
 
@@ -1093,6 +1105,7 @@ function NotificationPanel({
       title: `${todayAppointments.length} appointment${todayAppointments.length > 1 ? "s" : ""} today`,
       text: "Keep consultation preparation ready for today.",
       tone: "border-cyan-200 bg-cyan-50 text-cyan-700",
+      target: "/doctor-dashboard#appointments",
     });
   }
 
@@ -1102,6 +1115,7 @@ function NotificationPanel({
       title: `${missingMeetingLinkAppointments.length} appointment${missingMeetingLinkAppointments.length > 1 ? "s" : ""} need link`,
       text: "Add Google Meet, Zoom or Jitsi link before consultation.",
       tone: "border-red-200 bg-red-50 text-red-700",
+      target: "/doctor-dashboard#appointments",
     });
   }
 
@@ -1111,39 +1125,88 @@ function NotificationPanel({
       title: `${pendingPaymentAppointments.length} payment${pendingPaymentAppointments.length > 1 ? "s" : ""} pending`,
       text: "Check payment status before closing consultation.",
       tone: "border-slate-200 bg-slate-50 text-slate-700",
+      target: "/doctor-dashboard#payments",
     });
   }
 
+  const noticeCount =
+    pendingAppointments.length +
+    todayAppointments.length +
+    missingMeetingLinkAppointments.length +
+    pendingPaymentAppointments.length;
+
+  const handleNoticeClick = (target) => {
+    setOpen(false);
+    navigate(target);
+  };
+
   return (
-    <Panel title="Doctor Notifications" subtitle="Live reminders from appointment data">
-      {notices.length === 0 ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-4">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#0f766e] shadow-sm">
-            <CheckCircle2 size={18} />
-          </span>
-          <div>
-            <h3 className="text-sm font-bold text-slate-950">All clear for now</h3>
-            <p className="mt-1 text-sm font-medium text-slate-600">
-              No urgent appointment, meeting link or payment notification is pending.
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        className="relative inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#baf4ea] hover:bg-[#e6fbf7] hover:text-[#0f766e]"
+      >
+        <span className="relative grid h-7 w-7 place-items-center rounded-lg bg-[#e6fbf7] text-[#0f766e]">
+          <Bell size={15} />
+          {noticeCount > 0 && (
+            <span className="absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-[#13c8b4] px-1 text-[0.65rem] font-black leading-none text-white">
+              {noticeCount > 9 ? "9+" : noticeCount}
+            </span>
+          )}
+        </span>
+        <span>Notifications</span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-[80] mt-3 w-[22rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/12">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <p className="text-sm font-black text-slate-950">Doctor Notifications</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Live reminders from appointment, link and payment data
             </p>
           </div>
-        </div>
-      ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {notices.map((notice) => (
-            <div key={notice.title} className={cx("rounded-2xl border p-3.5", notice.tone)}>
-              <div className="flex gap-3">
-                <span className="mt-0.5 shrink-0">{notice.icon}</span>
+
+          <div className="max-h-[24rem] space-y-2 overflow-y-auto p-3">
+            {notices.length === 0 ? (
+              <div className="flex items-start gap-3 rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#0f766e] shadow-sm">
+                  <CheckCircle2 size={17} />
+                </span>
                 <div>
-                  <p className="text-sm font-bold">{notice.title}</p>
-                  <p className="mt-1 text-xs font-medium opacity-85">{notice.text}</p>
+                  <p className="text-sm font-bold text-slate-950">All clear for now</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+                    No urgent appointment, meeting link or payment notification is pending.
+                  </p>
                 </div>
               </div>
-            </div>
-          ))}
+            ) : (
+              notices.map((notice) => (
+                <button
+                  key={notice.title}
+                  type="button"
+                  onClick={() => handleNoticeClick(notice.target)}
+                  className={cx(
+                    "w-full rounded-2xl border p-3 text-left transition hover:scale-[1.01] hover:shadow-sm",
+                    notice.tone
+                  )}
+                >
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 shrink-0">{notice.icon}</span>
+                    <div>
+                      <p className="text-sm font-bold">{notice.title}</p>
+                      <p className="mt-1 text-xs font-medium leading-5 opacity-85">
+                        {notice.text}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       )}
-    </Panel>
+    </div>
   );
 }
 
@@ -1171,13 +1234,6 @@ function OverviewLayout({
 
   return (
     <section className="space-y-4">
-      <NotificationPanel
-        pendingAppointments={pendingAppointments}
-        todayAppointments={todayAppointments}
-        missingMeetingLinkAppointments={missingMeetingLinkAppointments}
-        pendingPaymentAppointments={pendingPaymentAppointments}
-      />
-
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard icon={<CalendarDays size={16} />} label="Total Appointments" value={appointments.length} />
         <StatCard icon={<Clock3 size={16} />} label="Today" value={todayAppointments.length} />

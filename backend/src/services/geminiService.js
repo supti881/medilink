@@ -1,235 +1,141 @@
 const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
-const DEFAULT_GENERATION_CONFIG = {
-  temperature: 0.35,
-  topP: 0.9,
-  topK: 40,
-  maxOutputTokens: 900,
-};
+export const MEDILINK_AI_DISCLAIMER =
+  "This AI assistant provides general health guidance only. It is not a medical diagnosis, prescription, or emergency service. Please consult a qualified doctor for medical decisions.";
 
-const DEFAULT_SAFETY_SETTINGS = [
-  {
-    category: "HARM_CATEGORY_HARASSMENT",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE",
-  },
-  {
-    category: "HARM_CATEGORY_HATE_SPEECH",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE",
-  },
-  {
-    category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE",
-  },
-  {
-    category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-    threshold: "BLOCK_MEDIUM_AND_ABOVE",
-  },
-];
+export const buildAiContextFromUser = (user = {}) => {
+  const profile = user.profile || user;
 
-const MEDICAL_DISCLAIMER =
-  "This is AI-generated guidance for informational support only. It is not a diagnosis or treatment plan. Please consult a licensed doctor for medical decisions.";
+  const contextParts = [
+    profile?.name ? `Patient name: ${profile.name}` : "",
+    profile?.age ? `Age: ${profile.age}` : "",
+    profile?.gender ? `Gender: ${profile.gender}` : "",
+    profile?.bloodGroup ? `Blood group: ${profile.bloodGroup}` : "",
+    profile?.medicalNotes ? `Medical notes: ${profile.medicalNotes}` : "",
+    profile?.emergencyContactName
+      ? `Emergency contact: ${profile.emergencyContactName}`
+      : "",
+  ].filter(Boolean);
 
-const ROLE_CONTEXT = {
-  patient: `
-You are MediLink AI for a patient.
-Your job:
-- Explain health information in simple language.
-- Suggest when the patient should book a doctor appointment.
-- Identify emergency red flags.
-- Never give a final diagnosis.
-- Never prescribe medicine dosage.
-- Always advise consulting a licensed doctor for diagnosis and treatment.
-`,
-
-  doctor: `
-You are MediLink AI for a doctor.
-Your job:
-- Help draft clinical notes, prescription advice wording, follow-up instructions, and patient-friendly explanations.
-- Do not replace the doctor's clinical judgment.
-- Do not invent lab values, diagnosis, or patient history.
-- Keep the output concise, professional, and medically cautious.
-`,
-
-  admin: `
-You are MediLink AI for an admin.
-Your job:
-- Summarize support tickets.
-- Detect priority and urgency.
-- Draft polite support replies.
-- Help classify operational issues.
-- Do not expose private patient data unnecessarily.
-`,
-
-  general: `
-You are MediLink AI assistant.
-Your job:
-- Help users understand MediLink features.
-- Keep responses safe, professional, and concise.
-- For medical questions, do not give final diagnosis or treatment.
-`,
-};
-
-const normalizeRole = (role = "general") => {
-  const cleanRole = String(role || "general").toLowerCase();
-
-  if (["patient", "doctor", "admin"].includes(cleanRole)) {
-    return cleanRole;
-  }
-
-  return "general";
+  return contextParts.length
+    ? contextParts.join("\n")
+    : "No additional patient profile context available.";
 };
 
 const extractGeminiText = (data) => {
-  const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+  const parts = data?.candidates?.[0]?.content?.parts || [];
 
-  const text = candidates
-    .flatMap((candidate) => candidate?.content?.parts || [])
+  return parts
     .map((part) => part?.text || "")
     .filter(Boolean)
     .join("\n")
     .trim();
-
-  if (text) {
-    return text;
-  }
-
-  const finishReason = candidates?.[0]?.finishReason;
-
-  if (finishReason) {
-    return `AI response was blocked or stopped. Reason: ${finishReason}`;
-  }
-
-  return "AI could not generate a response right now.";
 };
 
-const buildSystemInstruction = ({ role, context = "" }) => {
-  const normalizedRole = normalizeRole(role);
-  const roleInstruction = ROLE_CONTEXT[normalizedRole] || ROLE_CONTEXT.general;
-
-  return `
-${roleInstruction}
-
-Project context:
-MediLink is a healthcare appointment, prescription, payment, support, and medical history management platform.
-
-Safety rules:
-- Do not claim certainty for diagnosis.
-- Do not create emergency delay.
-- If symptoms sound severe, advise emergency care immediately.
-- Do not provide dangerous, illegal, or harmful instructions.
-- Keep private data minimal.
-- Add this disclaimer when the topic is medical:
-"${MEDICAL_DISCLAIMER}"
-
-Extra context from app:
-${context || "No extra context provided."}
-`;
-};
-
-export const generateGeminiResponse = async ({
-  prompt,
-  role = "general",
+const buildPromptText = ({
+  systemInstruction = "",
   context = "",
-  temperature,
-  maxOutputTokens,
+  aiContext = "",
+  prompt = "",
+  userPrompt = "",
+  text = "",
+  symptoms = "",
+  duration = "",
+  age = "",
+  gender = "",
+  existingConditions = "",
+  currentMedicines = "",
+  extraNotes = "",
 }) => {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const safetyInstruction = `
+You are MediLink AI Assistant for a healthcare web application.
+Give safe, simple, non-diagnostic health guidance.
+Do not prescribe medicine.
+Do not claim a confirmed diagnosis.
+For emergency symptoms, advise immediate emergency medical care.
+Recommend booking a qualified doctor when appropriate.
+Keep the answer clear and practical.
+`;
+
+  const promptParts = [
+    safetyInstruction,
+    systemInstruction,
+    context ? `Patient context:\n${context}` : "",
+    aiContext ? `Patient context:\n${aiContext}` : "",
+    prompt,
+    userPrompt,
+    text,
+    symptoms ? `Symptoms: ${symptoms}` : "",
+    duration ? `Duration: ${duration}` : "",
+    age ? `Age: ${age}` : "",
+    gender ? `Gender: ${gender}` : "",
+    currentMedicines ? `Current medicines: ${currentMedicines}` : "",
+    existingConditions ? `Existing conditions: ${existingConditions}` : "",
+    extraNotes ? `Extra notes: ${extraNotes}` : "",
+  ].filter(Boolean);
+
+  return promptParts.join("\n\n").trim();
+};
+
+export const generateGeminiResponse = async (payload = {}) => {
+  const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
 
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is missing in backend .env file.");
   }
 
-  if (!prompt || !String(prompt).trim()) {
-    throw new Error("AI prompt is required.");
+  const model = String(process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
+  const endpoint = `${GEMINI_API_BASE_URL}/models/${model}:generateContent`;
+
+  const promptText = buildPromptText(payload);
+
+  if (!promptText) {
+    throw new Error("Gemini prompt is empty.");
   }
-
-  if (typeof fetch !== "function") {
-    throw new Error(
-      "Global fetch is not available. Please use Node.js 18+ for the backend."
-    );
-  }
-
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-
-  const endpoint = `${GEMINI_API_BASE_URL}/models/${model}:generateContent?key=${apiKey}`;
-
-  const requestBody = {
-    systemInstruction: {
-      parts: [
-        {
-          text: buildSystemInstruction({
-            role,
-            context,
-          }),
-        },
-      ],
-    },
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: String(prompt).trim(),
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      ...DEFAULT_GENERATION_CONFIG,
-      temperature:
-        typeof temperature === "number"
-          ? temperature
-          : DEFAULT_GENERATION_CONFIG.temperature,
-      maxOutputTokens:
-        typeof maxOutputTokens === "number"
-          ? maxOutputTokens
-          : DEFAULT_GENERATION_CONFIG.maxOutputTokens,
-    },
-    safetySettings: DEFAULT_SAFETY_SETTINGS,
-  };
 
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
     },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: promptText }],
+        },
+      ],
+      generationConfig: {
+        temperature: payload.temperature ?? 0.35,
+        maxOutputTokens: payload.maxOutputTokens ?? 700,
+      },
+    }),
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const message =
+    const apiMessage =
       data?.error?.message ||
       data?.message ||
       `Gemini API request failed with status ${response.status}`;
 
-    throw new Error(message);
+    throw new Error(`Gemini API error ${response.status}: ${apiMessage}`);
   }
 
   const answer = extractGeminiText(data);
 
+  if (!answer) {
+    throw new Error("Gemini returned an empty response.");
+  }
+
   return {
     answer,
     model,
-    role: normalizeRole(role),
+    disclaimer: MEDILINK_AI_DISCLAIMER,
     raw: data,
   };
 };
-
-export const buildAiContextFromUser = (user) => {
-  if (!user) {
-    return "No authenticated user context.";
-  }
-
-  return `
-Authenticated user:
-- Name: ${user.name || "Unknown"}
-- Email: ${user.email || "Unknown"}
-- Role: ${user.role || "Unknown"}
-`;
-};
-
-export const MEDILINK_AI_DISCLAIMER = MEDICAL_DISCLAIMER;

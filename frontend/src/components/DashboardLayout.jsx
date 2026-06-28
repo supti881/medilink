@@ -408,6 +408,7 @@ export default function DashboardLayout({
   onRefresh,
   refreshing = false,
   lastSynced,
+  headerActions,
 }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -447,7 +448,7 @@ export default function DashboardLayout({
         </aside>
 
         <div className="min-w-0 flex-1 p-4 lg:p-6">
-          <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <header className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -478,8 +479,7 @@ export default function DashboardLayout({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {lastSynced && (
+            <div className="ml-auto flex w-full flex-wrap items-center justify-start gap-2 lg:w-auto lg:justify-end">              {headerActions}              {lastSynced && (
                 <span className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 sm:inline-flex">
                   <Database size={14} className="text-emerald-600" />
                   Synced {formatDateTime(lastSynced)}
@@ -554,4 +554,7 @@ export default function DashboardLayout({
     </>
   );
 }
+
+
+
 
