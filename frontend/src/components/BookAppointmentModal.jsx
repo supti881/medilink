@@ -494,18 +494,19 @@ export default function BookAppointmentModal({
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading || activeSlots.length === 0 || selectedSlotIsFull}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 py-3.5 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading && <Loader2 size={18} className="animate-spin" />}
-              {selectedSlotIsFull
-                ? "Selected slot is full"
-                : loading
-                  ? "Booking appointment..."
-                  : "Confirm booking"}
-            </button>
+<button
+  type="submit"
+  disabled={loading || activeSlots.length === 0 || selectedSlotIsFull}
+  style={{ color: "#ffffff" }}
+  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#13c8b4] py-3.5 text-sm font-bold text-white shadow-lg shadow-teal-900/15 transition hover:bg-[#0fb3a1] disabled:cursor-not-allowed disabled:opacity-60"
+>
+  {loading && <Loader2 size={18} className="animate-spin" />}
+  {selectedSlotIsFull
+    ? "Selected slot is full"
+    : loading
+      ? "Booking appointment..."
+      : "Confirm booking"}
+</button>
           </form>
         </motion.div>
       </motion.div>

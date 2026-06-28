@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import {
+  Bell,
   CalendarDays,
   Camera,
   CheckCircle2,
@@ -707,6 +708,8 @@ function PatientDashboard() {
   const [error, setError] = useState("");
   const [lastSynced, setLastSynced] = useState(null);
   const [bookDoctor, setBookDoctor] = useState(null);
+  const [paymentAppointment, setPaymentAppointment] = useState(null);
+  const [bookingFeedback, setBookingFeedback] = useState("");
   const [paymentSubmittingId, setPaymentSubmittingId] = useState("");
   const [paymentFeedback, setPaymentFeedback] = useState("");
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
@@ -737,6 +740,26 @@ function PatientDashboard() {
       setProfileError("");
     }
   }, [activeLayout]);
+
+  useEffect(() => {
+    if (!bookingFeedback) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setBookingFeedback("");
+    }, 7000);
+
+    return () => window.clearTimeout(timer);
+  }, [bookingFeedback]);
+
+  useEffect(() => {
+    if (!paymentFeedback) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setPaymentFeedback("");
+    }, 7000);
+
+    return () => window.clearTimeout(timer);
+  }, [paymentFeedback]);
 
   const syncProfileForm = (currentUser) => {
     if (!currentUser) return;
@@ -984,7 +1007,7 @@ function PatientDashboard() {
     }
   };
 
-  const handleAppointmentPayment = async (appointment) => {
+  const handleAppointmentPayment = async (appointment, paymentMethod = "mock") => {
     if (!appointment?._id) {
       setError("Appointment ID is missing. Please refresh and try again.");
       return;
@@ -1005,17 +1028,28 @@ function PatientDashboard() {
       await paymentApi.createMockPayment({
         appointment: appointment._id,
         amount,
-        paymentMethod: "mock",
-        transactionId: `ML-DASH-${Date.now()}`,
+        paymentMethod,
+        transactionId: `ML-PAY-${Date.now()}`,
       });
 
-      setPaymentFeedback("Payment completed and saved for this appointment.");
+      setPaymentAppointment(null);
+      setPaymentFeedback(
+        "Payment completed successfully. Your appointment payment has been saved."
+      );
       await fetchDashboardData(true);
     } catch (err) {
       setError(err.message || "Payment failed. Please try again.");
     } finally {
       setPaymentSubmittingId("");
     }
+  };
+
+  const handleBookingSuccess = () => {
+    setBookDoctor(null);
+    setBookingFeedback(
+      "Appointment request submitted successfully. Please wait for doctor approval."
+    );
+    fetchDashboardData(true);
   };
 
   const handleMedicalRecordUpload = async (payload) => {
@@ -1054,8 +1088,36 @@ function PatientDashboard() {
     );
   }
 
+  const topNotification = paymentFeedback
+    ? {
+        title: "Payment completed",
+        message: paymentFeedback,
+      }
+    : bookingFeedback
+      ? {
+          title: "Appointment request submitted",
+          message: bookingFeedback,
+        }
+      : null;
+
   return (
     <>
+      {topNotification && (
+        <div className="fixed left-1/2 top-5 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-[#baf4ea] bg-white px-4 py-3 text-sm shadow-2xl shadow-slate-900/15">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
+              <CheckCircle2 size={18} />
+            </span>
+            <div className="min-w-0">
+              <p className="font-black text-slate-950">{topNotification.title}</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+                {topNotification.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <DashboardLayout
         title={`Hello, ${user?.name?.split(" ")[0] || "Patient"}`}
         subtitle="Manage appointments, prescriptions, payments, medical records and support"
@@ -1064,12 +1126,20 @@ function PatientDashboard() {
         onRefresh={() => fetchDashboardData(true)}
         refreshing={refreshing}
         lastSynced={lastSynced}
+        headerActions={
+          <PatientNotificationCenter
+            pendingAppointments={pendingAppointments}
+            prescriptions={prescriptions}
+            activeTickets={activeTickets}
+          />
+        }
       >
         {error && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
             {error}
           </p>
         )}
+
 
         {activeLayout === "overview" && (
           <OverviewLayout
@@ -1116,7 +1186,7 @@ function PatientDashboard() {
             payments={payments}
             paymentSubmittingId={paymentSubmittingId}
             paymentFeedback={paymentFeedback}
-            onPayAppointment={handleAppointmentPayment}
+            onPayAppointment={(appointment) => setPaymentAppointment(appointment)}
             onCancel={handleCancel}
             onRefresh={() => fetchDashboardData(true)}
           />
@@ -1152,7 +1222,17 @@ function PatientDashboard() {
         doctor={bookDoctor}
         open={Boolean(bookDoctor)}
         onClose={() => setBookDoctor(null)}
-        onSuccess={() => fetchDashboardData(true)}
+        onSuccess={handleBookingSuccess}
+      />
+
+      <PaymentCheckoutModal
+        appointment={paymentAppointment}
+        open={Boolean(paymentAppointment)}
+        submitting={Boolean(
+          paymentAppointment && paymentSubmittingId === paymentAppointment._id
+        )}
+        onClose={() => setPaymentAppointment(null)}
+        onConfirm={handleAppointmentPayment}
       />
 
       <PatientAiAssistantLauncher
@@ -1162,6 +1242,124 @@ function PatientDashboard() {
         onClose={() => setAiAssistantOpen(false)}
       />
     </>
+  );
+}
+
+
+function PatientNotificationCenter({
+  pendingAppointments = [],
+  prescriptions = [],
+  activeTickets = [],
+}) {
+  const [open, setOpen] = useState(false);
+  const pendingCount = pendingAppointments.length;
+  const prescriptionCount = prescriptions.length;
+  const ticketCount = activeTickets.length;
+  const signalCount = pendingCount + prescriptionCount + ticketCount;
+
+  const items = [
+    {
+      key: "appointments",
+      icon: <CalendarDays size={16} />,
+      title: pendingCount
+        ? `${pendingCount} appointment request${pendingCount === 1 ? "" : "s"} pending`
+        : "Appointments are up to date",
+      text: pendingCount
+        ? "Wait for doctor/admin approval before joining consultation."
+        : "No pending appointment request is waiting right now.",
+      tone: pendingCount ? "amber" : "teal",
+      to: "/patient-dashboard#appointments",
+    },
+    {
+      key: "prescriptions",
+      icon: <FileText size={16} />,
+      title: `${prescriptionCount} prescription record${prescriptionCount === 1 ? "" : "s"}`,
+      text: "Download prescriptions or verify RX token from your patient workspace.",
+      tone: "teal",
+      to: "/patient-dashboard#verify-rx",
+    },
+    {
+      key: "support",
+      icon: <Headphones size={16} />,
+      title: ticketCount
+        ? `${ticketCount} support ticket${ticketCount === 1 ? "" : "s"} active`
+        : "No active support ticket",
+      text: "Track support replies and updates from the support section.",
+      tone: ticketCount ? "rose" : "slate",
+      to: "/patient-dashboard#support",
+    },
+  ];
+
+  const toneClasses = {
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    rose: "border-rose-200 bg-rose-50 text-rose-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-600",
+    teal: "border-[#baf4ea] bg-[#e6fbf7] text-[#0f766e]",
+  };
+
+  return (
+    <div className="relative z-30">
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-[#baf4ea] hover:text-[#0f766e]"
+        aria-expanded={open}
+      >
+        <span className="relative grid h-7 w-7 place-items-center rounded-lg bg-[#e6fbf7] text-[#0f766e]">
+          <Bell size={15} />
+          {signalCount > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#13c8b4] px-1 text-[0.65rem] font-black text-white ring-2 ring-white">
+              {signalCount > 9 ? "9+" : signalCount}
+            </span>
+          )}
+        </span>
+        Notifications
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+0.75rem)] w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/15">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <div>
+              <p className="text-sm font-black text-slate-950">
+                Patient Notifications
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                Appointment, prescription and support updates
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="grid h-8 w-8 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+              aria-label="Close notifications"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="max-h-[22rem] space-y-2 overflow-y-auto p-3">
+            {items.map((item) => (
+              <Link
+                key={item.key}
+                to={item.to}
+                onClick={() => setOpen(false)}
+                className={`flex items-start gap-3 rounded-2xl border px-3 py-3 transition hover:scale-[1.01] ${toneClasses[item.tone] || toneClasses.slate}`}
+              >
+                <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/75 shadow-sm">
+                  {item.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">{item.title}</span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 opacity-90">
+                    {item.text}
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1207,46 +1405,6 @@ function OverviewLayout({
 
   return (
     <section id="overview" className="space-y-4">
-      <DataPanel
-        title="Patient Notifications"
-        subtitle="Live reminders from appointment, prescription and support data"
-      >
-        <div className="grid gap-3 lg:grid-cols-2">
-          <PatientSignalCard
-            icon={<CalendarDays size={16} />}
-            tone={pendingAppointments.length ? "amber" : "teal"}
-            title={
-              pendingAppointments.length
-                ? `${pendingAppointments.length} appointment request${pendingAppointments.length === 1 ? "" : "s"} pending`
-                : "Appointments are up to date"
-            }
-            text={
-              pendingAppointments.length
-                ? "Wait for doctor/admin approval before joining consultation."
-                : "No pending appointment request is waiting right now."
-            }
-          />
-
-          <PatientSignalCard
-            icon={<FileText size={16} />}
-            tone="teal"
-            title={`${prescriptions.length} prescription record${prescriptions.length === 1 ? "" : "s"}`}
-            text="Download prescriptions or verify RX token from your patient workspace."
-          />
-
-          <PatientSignalCard
-            icon={<Headphones size={16} />}
-            tone={activeTickets.length ? "red" : "slate"}
-            title={
-              activeTickets.length
-                ? `${activeTickets.length} support ticket${activeTickets.length === 1 ? "" : "s"} active`
-                : "No active support ticket"
-            }
-            text="Track support replies and updates from the support section."
-          />
-        </div>
-      </DataPanel>
-
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={<CalendarDays size={20} />}
@@ -1731,6 +1889,168 @@ function ProfileEditForm({
   );
 }
 
+
+function PaymentCheckoutModal({
+  appointment,
+  open,
+  submitting = false,
+  onClose,
+  onConfirm,
+}) {
+  const [paymentMethod, setPaymentMethod] = useState("mock");
+
+  useEffect(() => {
+    if (open) {
+      setPaymentMethod("mock");
+    }
+  }, [open, appointment?._id]);
+
+  if (!open || !appointment) {
+    return null;
+  }
+
+  const doctorName = getAppointmentDoctorName(appointment);
+  const appointmentFee = getAppointmentFee(appointment);
+  const paymentMethods = [
+    ["mock", "Mock Payment", "Demo gateway for project testing"],
+    ["card", "Card", "Visa / Mastercard simulation"],
+    ["bkash", "Mobile Banking", "bKash style simulation"],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-5">
+      <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]">
+        <div className="shrink-0 flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#e6fbf7] text-[#0f766e]">
+              <CreditCard size={20} />
+            </div>
+            <div>
+              <p className="text-base font-black text-slate-950">
+                Payment Checkout
+              </p>
+              <p className="text-xs font-semibold text-slate-500">
+                Secure consultation payment for this appointment
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Close payment checkout"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
+          <div className="rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0f766e]">
+                  Appointment Summary
+                </p>
+                <h3 className="mt-2 text-xl font-black text-slate-950">
+                  {doctorName}
+                </h3>
+                <p className="mt-1 text-sm font-bold text-[#0f766e]">
+                  {getAppointmentSpecialization(appointment)}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                  Payable Amount
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  ৳{appointmentFee}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <InfoRow label="Date" value={formatDate(appointment.appointmentDate)} />
+            <InfoRow label="Time" value={getAppointmentTimeRange(appointment)} />
+            <InfoRow label="Queue" value={getQueueLabel(appointment)} />
+            <InfoRow
+              label="Status"
+              value={String(appointment.status || "pending").replace(/_/g, " ")}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+              Payment Method
+            </p>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {paymentMethods.map(([value, label, hint]) => {
+                const active = paymentMethod === value;
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPaymentMethod(value)}
+                    disabled={submitting}
+                    className={`rounded-2xl border px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      active
+                        ? "border-[#13c8b4] bg-[#e6fbf7] shadow-sm"
+                        : "border-slate-200 bg-white hover:border-[#baf4ea]"
+                    }`}
+                  >
+                    <span className="block text-sm font-black text-slate-950">
+                      {label}
+                    </span>
+                    <span className="mt-1 block text-[0.72rem] font-semibold leading-4 text-slate-500">
+                      {hint}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-800">
+            This is a mock payment gateway for project demonstration. No real money
+            will be charged.
+          </div>
+
+          <div className="sticky bottom-0 -mx-4 -mb-4 flex flex-col-reverse gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:-mb-5 sm:flex-row sm:justify-end sm:px-5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onConfirm?.(appointment, paymentMethod)}
+              disabled={submitting}
+              style={{ color: "#ffffff" }}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-900/15 transition hover:bg-[#0fb3a1] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? (
+                <Loader2 size={17} className="animate-spin" />
+              ) : (
+                <CreditCard size={17} />
+              )}
+              {submitting ? "Processing payment..." : "Confirm Payment"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AppointmentsLayout({
   appointments,
   payments = [],
@@ -1747,12 +2067,6 @@ function AppointmentsLayout({
         subtitle={`${appointments.length} appointment records with payment action`}
         onRefresh={onRefresh}
       >
-        {paymentFeedback && (
-          <div className="mb-4 rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] px-4 py-3 text-sm font-bold text-[#0f766e]">
-            {paymentFeedback}
-          </div>
-        )}
-
         {appointments.length === 0 ? (
           <EmptyState
             text="No appointment booked yet."
@@ -1951,6 +2265,56 @@ function AppointmentsLayout({
   );
 }
 
+function getDoctorExperienceLabel(doctor) {
+  const rawValue =
+    doctor?.experienceYears ?? doctor?.experience ?? doctor?.yearsOfExperience;
+
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return "Not added";
+  }
+
+  const years = Number(rawValue);
+
+  if (!Number.isFinite(years) || years <= 0) {
+    return "Not added";
+  }
+
+  return `${years} year${years === 1 ? "" : "s"}`;
+}
+
+function getDoctorFeeLabel(doctor) {
+  const fee = Number(doctor?.consultationFee);
+
+  if (!Number.isFinite(fee) || fee <= 0) {
+    return "Fee not added";
+  }
+
+  return `৳${fee} / consultation`;
+}
+
+function getActiveDoctorSlots(doctor) {
+  if (!Array.isArray(doctor?.availableSlots)) {
+    return [];
+  }
+
+  return doctor.availableSlots.filter(
+    (slot) => slot?.day && slot?.startTime && slot?.endTime && slot.isActive !== false
+  );
+}
+
+function getDoctorSlotLabel(slot) {
+  if (!slot) {
+    return "Slot not updated";
+  }
+
+  const capacity = Number(slot.capacity) || 0;
+  const bookedCount = Number(slot.bookedCount) || 0;
+  const remaining = Math.max(capacity - bookedCount, 0);
+  const capacityLabel = capacity ? ` · ${remaining}/${capacity} seats left` : "";
+
+  return `${slot.day} · ${slot.startTime} - ${slot.endTime}${capacityLabel}`;
+}
+
 function DoctorsLayout({ doctors, onBook }) {
   const activeDoctors = doctors.filter((doctor) => {
     const doctorStatus = String(doctor.status || "active").toLowerCase();
@@ -1963,75 +2327,150 @@ function DoctorsLayout({ doctors, onBook }) {
     <section id="doctors" className="scroll-mt-6">
       <DataPanel
         title="Find Doctors"
-        subtitle={`${activeDoctors.length} approved doctors available`}
+        subtitle={`${activeDoctors.length} approved doctor${
+          activeDoctors.length === 1 ? "" : "s"
+        } available · information loaded from backend profiles`}
       >
         {activeDoctors.length === 0 ? (
           <EmptyState text="No approved doctor is available right now." />
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
-            {activeDoctors.map((doctor) => (
-              <RecordCard key={doctor._id}>
-                <div className="flex gap-4">
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-teal-100">
-                    {doctor.imageUrl ||
-                    doctor.profileImage ||
-                    doctor.user?.profileImage ? (
-                      <img
-                        src={getMediaUrl(
-                          doctor.imageUrl ||
-                            doctor.profileImage ||
-                            doctor.user?.profileImage
+            {activeDoctors.map((doctor) => {
+              const activeSlots = getActiveDoctorSlots(doctor);
+              const visibleSlots = activeSlots.slice(0, 2);
+              const hiddenSlotCount = Math.max(activeSlots.length - visibleSlots.length, 0);
+              const doctorImage =
+                doctor.imageUrl || doctor.profileImage || doctor.user?.profileImage || "";
+              const doctorName = formatDoctorDisplayName(
+                doctor.fullName || doctor.user?.name
+              );
+              const hasBookableSlots = activeSlots.length > 0;
+
+              return (
+                <RecordCard key={doctor._id}>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] shadow-sm">
+                      {doctorImage ? (
+                        <img
+                          src={getMediaUrl(doctorImage)}
+                          alt={doctorName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="grid h-full w-full place-items-center text-xl font-black text-[#0f766e]">
+                          {doctorName?.replace(/^Dr\.\s*/i, "")?.charAt(0)?.toUpperCase() || "D"}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-lg font-black text-slate-950">
+                            {doctorName}
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-[#0f766e]">
+                            {doctor.specialization || "General Physician"}
+                          </p>
+
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            {doctor.department || "MediLink Department"}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 rounded-xl border border-[#baf4ea] bg-[#e6fbf7] px-3 py-1.5 text-xs font-black text-[#0f766e]">
+                          {getDoctorFeeLabel(doctor)}
+                        </span>
+                      </div>
+
+                      {doctor.bio && (
+                        <p className="mt-3 line-clamp-2 text-sm font-medium leading-6 text-slate-600">
+                          {doctor.bio}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <InfoRow
+                      label="Experience"
+                      value={getDoctorExperienceLabel(doctor)}
+                    />
+
+                    <InfoRow
+                      label="Qualification"
+                      value={doctor.qualification || "Not added"}
+                    />
+
+                    <InfoRow
+                      label="Department"
+                      value={doctor.department || "Not added"}
+                    />
+
+                    <InfoRow
+                      label="Consultation Fee"
+                      value={getDoctorFeeLabel(doctor)}
+                    />
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                          Available Slots
+                        </p>
+                        <p className="mt-1 text-sm font-black text-slate-950">
+                          {hasBookableSlots
+                            ? `${activeSlots.length} active slot${activeSlots.length === 1 ? "" : "s"}`
+                            : "Slots not updated yet"}
+                        </p>
+                      </div>
+
+                      {doctor.rating > 0 && (
+                        <span className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">
+                          Rating {doctor.rating}/5 · {doctor.totalReviews || 0} reviews
+                        </span>
+                      )}
+                    </div>
+
+                    {hasBookableSlots && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {visibleSlots.map((slot, index) => (
+                          <span
+                            key={`${slot.day}-${slot.startTime}-${slot.endTime}-${index}`}
+                            className="rounded-xl border border-[#baf4ea] bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                          >
+                            {getDoctorSlotLabel(slot)}
+                          </span>
+                        ))}
+
+                        {hiddenSlotCount > 0 && (
+                          <span className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">
+                            +{hiddenSlotCount} more
+                          </span>
                         )}
-                        alt={doctor.fullName}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="grid h-full w-full place-items-center text-lg font-black text-teal-700">
-                        {doctor.fullName?.charAt(0)?.toUpperCase() || "D"}
                       </div>
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="text-lg font-black text-slate-950">
-                      {formatDoctorDisplayName(
-                        doctor.fullName || doctor.user?.name
-                      )}
-                    </p>
-
-                    <p className="mt-1 text-sm font-bold text-teal-700">
-                      {doctor.specialization || "General Physician"}
-                    </p>
-
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
-                      {doctor.department || "MediLink Doctor"} · ৳
-                      {doctor.consultationFee || 0}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <InfoRow
-                    label="Experience"
-                    value={`${doctor.experience || 0} years`}
-                  />
-
-                  <InfoRow
-                    label="Qualification"
-                    value={doctor.qualification || "Not added"}
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onBook(doctor)}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-teal-700"
-                >
-                  <CalendarDays size={17} />
-                  Book Appointment
-                </button>
-              </RecordCard>
-            ))}
+                  <button
+                    type="button"
+                    disabled={!hasBookableSlots}
+                    onClick={() => onBook(doctor)}
+                    style={hasBookableSlots ? { color: "#ffffff" } : undefined}
+                    className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                      hasBookableSlots
+                        ? "bg-[#13c8b4] text-white hover:bg-[#0fb3a1]"
+                        : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    <CalendarDays size={17} />
+                    {hasBookableSlots ? "Book Appointment" : "Slots Not Available"}
+                  </button>
+                </RecordCard>
+              );
+            })}
           </div>
         )}
       </DataPanel>
@@ -2436,6 +2875,16 @@ function MedicalHistoryLayout({
 }
 
 function PatientAiAssistantLauncher({ open, user, onOpen, onClose }) {
+  const navigate = useNavigate();
+  const [expanded, setExpanded] = useState(false);
+
+  const handleFindDoctors = () => {
+    onClose();
+    window.setTimeout(() => {
+      navigate("/patient-dashboard#doctors");
+    }, 0);
+  };
+
   return (
     <>
       <button
@@ -2457,8 +2906,12 @@ function PatientAiAssistantLauncher({ open, user, onOpen, onClose }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[90] flex items-end justify-end bg-slate-950/45 p-3 backdrop-blur-sm sm:p-5">
-          <div className="h-[86vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-5">
+          <div
+            className={`w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl transition-all duration-300 ${
+              expanded ? "h-[94vh] max-w-7xl" : "h-[88vh] max-w-6xl"
+            }`}
+          >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-5">
               <div className="flex items-center gap-3">
                 <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
@@ -2474,18 +2927,32 @@ function PatientAiAssistantLauncher({ open, user, onOpen, onClose }) {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                aria-label="Close MediLink AI assistant"
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExpanded((previous) => !previous)}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:border-[#baf4ea] hover:bg-[#e6fbf7] hover:text-[#0f766e]"
+                >
+                  {expanded ? "Normal" : "Expand"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                  aria-label="Close MediLink AI assistant"
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
-            <div className="h-[calc(86vh-4.2rem)] overflow-y-auto bg-slate-50 p-3 sm:p-5">
-              <PatientAiAssistantLayout user={user} embedded />
+            <div className="h-[calc(100%-4.2rem)] overflow-y-auto bg-slate-50 p-3 sm:p-5">
+              <PatientAiAssistantLayout
+                user={user}
+                embedded
+                onFindDoctors={handleFindDoctors}
+              />
             </div>
           </div>
         </div>
@@ -2494,7 +2961,7 @@ function PatientAiAssistantLauncher({ open, user, onOpen, onClose }) {
   );
 }
 
-function PatientAiAssistantLayout({ user, embedded = false }) {
+function PatientAiAssistantLayout({ user, embedded = false, onFindDoctors }) {
   const [form, setForm] = useState({
     symptoms: "",
     duration: "",
@@ -2637,7 +3104,7 @@ function PatientAiAssistantLayout({ user, embedded = false }) {
   };
 
   const assistantContent = (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
             <div className="border-b border-slate-200 bg-white px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2665,7 +3132,7 @@ function PatientAiAssistantLayout({ user, embedded = false }) {
               </div>
             </div>
 
-            <div className="max-h-[30rem] min-h-[22rem] space-y-4 overflow-y-auto px-4 py-5">
+            <div className="min-h-[24rem] max-h-[42rem] space-y-4 overflow-y-auto px-4 py-5">
               {messages.map((message) => {
                 const isUser = message.role === "user";
 
@@ -2827,14 +3294,22 @@ function PatientAiAssistantLayout({ user, embedded = false }) {
               </div>
             </div>
 
-            <Link
-              to="/patient-dashboard#doctors"
-              style={{ color: "#ffffff" }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#0fb3a1]"
-            >
-              <CalendarDays size={17} />
-              Book Doctor Appointment
-            </Link>
+            <div className="rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] p-4">
+              <p className="text-sm font-black text-slate-950">Next Step</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
+                Choose a suitable approved doctor from backend profiles and book an available slot.
+              </p>
+
+              <button
+                type="button"
+                onClick={onFindDoctors}
+                style={{ color: "#ffffff" }}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#0fb3a1]"
+              >
+                <CalendarDays size={17} />
+                Find Suitable Doctors
+              </button>
+            </div>
           </aside>
         </div>
   );

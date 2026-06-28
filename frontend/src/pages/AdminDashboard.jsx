@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import {
   AlertCircle,
+  Bell,
   BadgeCheck,
   Ban,
   CalendarDays,
@@ -535,6 +536,7 @@ function AdminDashboard() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
   const [profileEditing, setProfileEditing] = useState(false);
+  const [adminNotificationsOpen, setAdminNotificationsOpen] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -728,6 +730,54 @@ function AdminDashboard() {
     phone: adminProfile?.phone || user?.phone,
     imageUrl: adminProfile?.imageUrl || user?.profileImage || user?.imageUrl,
     designation: adminProfile?.designation || "System Administrator",
+  };
+
+  const pendingDoctorNotifications = doctors.filter(
+    (doctor) => normalizeDoctorStatus(doctor.status) === "pending"
+  );
+
+  const adminNotificationItems = [
+    {
+      id: "pending-doctors",
+      tone: "amber",
+      icon: <Stethoscope size={16} />,
+      title: `${pendingDoctorNotifications.length} doctor profile${
+        pendingDoctorNotifications.length === 1 ? "" : "s"
+      } pending`,
+      text: "Review pending doctor profiles and approve valid accounts.",
+      target: "doctors",
+      show: pendingDoctorNotifications.length > 0,
+    },
+    {
+      id: "open-tickets",
+      tone: "red",
+      icon: <Headphones size={16} />,
+      title: `${openTickets.length} open support ticket${
+        openTickets.length === 1 ? "" : "s"
+      }`,
+      text: "Check patient issues and close resolved support requests.",
+      target: "tickets",
+      show: openTickets.length > 0,
+    },
+    {
+      id: "patient-accounts",
+      tone: "slate",
+      icon: <Users size={16} />,
+      title: `${patients.length} patient account${patients.length === 1 ? "" : "s"}`,
+      text: "Monitor patient access and account activity.",
+      target: "patients",
+      show: patients.length > 0,
+    },
+  ];
+
+  const visibleAdminNotifications = adminNotificationItems.filter(
+    (item) => item.show
+  );
+  const adminNotificationCount = visibleAdminNotifications.length;
+
+  const handleAdminNotificationOpen = (target) => {
+    setAdminNotificationsOpen(false);
+    navigate(`${location.pathname}#${target}`);
   };
 
   const handleAdminProfileChange = (event) => {
@@ -1190,6 +1240,15 @@ function AdminDashboard() {
       onRefresh={() => fetchAdminData(true)}
       refreshing={refreshing}
       lastSynced={lastSynced}
+      headerActions={
+        <AdminNotificationDropdown
+          open={adminNotificationsOpen}
+          count={adminNotificationCount}
+          notifications={visibleAdminNotifications}
+          onToggle={() => setAdminNotificationsOpen((previous) => !previous)}
+          onNavigate={handleAdminNotificationOpen}
+        />
+      }
     >
       <MessageBox error={error} success={success} />
 
@@ -1311,6 +1370,84 @@ function AdminDashboard() {
   );
 }
 
+
+function AdminNotificationDropdown({
+  open,
+  count = 0,
+  notifications = [],
+  onToggle,
+  onNavigate,
+}) {
+  const toneClass = {
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    red: "border-red-200 bg-red-50 text-red-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+    teal: "border-[#baf4ea] bg-[#e6fbf7] text-[#0f766e]",
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-[#baf4ea] hover:text-[#0f766e]"
+      >
+        <span className="relative grid h-8 w-8 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
+          <Bell size={16} />
+          {count > 0 && (
+            <span className="absolute -right-2 -top-2 grid min-h-5 min-w-5 place-items-center rounded-full bg-[#13c8b4] px-1 text-[0.65rem] font-black leading-none text-white">
+              {count}
+            </span>
+          )}
+        </span>
+        Notifications
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-[80] mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/12">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <p className="text-sm font-black text-slate-950">Admin Notifications</p>
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              Live operational signals from doctors, patients and support activity
+            </p>
+          </div>
+
+          <div className="max-h-80 space-y-2 overflow-y-auto p-3">
+            {notifications.length === 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">
+                No admin notification right now.
+              </div>
+            ) : (
+              notifications.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onNavigate?.(item.target)}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
+                    toneClass[item.tone] || toneClass.slate
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/75 shadow-sm">
+                      {item.icon}
+                    </span>
+                    <div>
+                      <p className="text-sm font-black">{item.title}</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 opacity-85">
+                        {item.text}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MessageBox({ error, success }) {
   if (!error && !success) return null;
 
@@ -1372,33 +1509,6 @@ function OverviewLayout({
 
   return (
     <section className="space-y-4">
-      <Panel
-        title="Admin Notifications"
-        subtitle="Live operational signals from doctors, patients and support activity"
-        icon={<ShieldCheck size={18} />}
-      >
-        <div className="grid gap-3 lg:grid-cols-2">
-          <SignalCard
-            icon={<Stethoscope size={16} />}
-            tone="amber"
-            title={`${pendingDoctors.length} doctor profile${pendingDoctors.length === 1 ? "" : "s"} pending`}
-            text="Review pending doctor profiles and approve valid accounts."
-          />
-          <SignalCard
-            icon={<Headphones size={16} />}
-            tone="red"
-            title={`${openTickets.length} open support ticket${openTickets.length === 1 ? "" : "s"}`}
-            text="Check patient issues and close resolved support requests."
-          />
-          <SignalCard
-            icon={<Users size={16} />}
-            tone="slate"
-            title={`${patients.length} patient account${patients.length === 1 ? "" : "s"}`}
-            text="Monitor patient access and account activity."
-          />
-        </div>
-      </Panel>
-
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           icon={<Stethoscope size={18} />}
@@ -1834,8 +1944,8 @@ function DoctorManagementLayout({
         />
         <StatCard
           icon={<UserX size={22} />}
-          label="Blocked / Rejected"
-          value={statusCounts.blocked + statusCounts.rejected}
+          label="Blocked"
+          value={statusCounts.blocked}
           tone="red"
         />
       </div>
@@ -1865,19 +1975,19 @@ function DoctorManagementLayout({
           ]}
         />
 
-        <div className="mt-5 rounded-3xl border border-teal-100 bg-teal-50/70 p-5">
-          <h3 className="text-sm font-black text-teal-900">
+        <div className="mt-4 rounded-2xl border border-teal-100 bg-teal-50/70 px-4 py-3">
+          <h3 className="text-xs font-black uppercase tracking-[0.16em] text-teal-900">
             Admin doctor workflow
           </h3>
-          <p className="mt-2 text-sm leading-6 text-teal-700">
-            Pending doctors can be approved, rejected or requested to change information. Active doctors can be suspended or blocked. Suspended, rejected and blocked doctors can be reactivated after review.
+          <p className="mt-1.5 text-xs font-semibold leading-5 text-teal-700">
+            Review pending doctors, approve verified profiles, or suspend/block active doctors when admin review is required.
           </p>
         </div>
 
         {doctors.length === 0 ? (
           <EmptyState text="No doctors found for this filter." />
         ) : (
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
             {doctors.map((doctor) => (
               <DoctorCard
                 key={doctor._id}
@@ -2004,7 +2114,7 @@ function PatientManagementLayout({
         {patients.length === 0 ? (
           <EmptyState text="No patients found for this filter." />
         ) : (
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
             {patients.map((patient) => (
               <PatientCard
                 key={patient._id}
@@ -2033,13 +2143,13 @@ function PatientAvatar({ patient }) {
         src={photoUrl}
         alt={patient.name || "Patient"}
         onError={() => setImageFailed(true)}
-        className="h-14 w-14 rounded-2xl border border-slate-200 object-cover shadow-sm"
+        className="h-12 w-12 rounded-xl border border-slate-200 object-cover shadow-sm"
       />
     );
   }
 
   return (
-    <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-lg font-black text-slate-500 shadow-sm">
+    <div className="grid h-12 w-12 place-items-center rounded-xl bg-white text-base font-black text-slate-500 shadow-sm">
       {firstLetter}
     </div>
   );
@@ -3090,13 +3200,13 @@ function DoctorAvatar({ doctor }) {
         src={photoUrl}
         alt={formatDoctorName(doctor.fullName || doctor.user?.name)}
         onError={() => setImageFailed(true)}
-        className="h-14 w-14 rounded-2xl border border-slate-200 object-cover shadow-sm"
+        className="h-12 w-12 rounded-xl border border-slate-200 object-cover shadow-sm"
       />
     );
   }
 
   return (
-    <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-lg font-black text-slate-500 shadow-sm">
+    <div className="grid h-12 w-12 place-items-center rounded-xl bg-white text-base font-black text-slate-500 shadow-sm">
       {firstLetter}
     </div>
   );
@@ -3107,20 +3217,24 @@ function DoctorCard({ doctor, compact = false, actionLoading = false, onViewDeta
   const slots = getDoctorAvailableSlotSummary(doctor);
   const actions = getDoctorActionPlan(status);
   const canUseActions = typeof onOpenAction === "function";
+  const experienceLabel =
+    Number(doctor.experienceYears) > 0
+      ? `${doctor.experienceYears}+ years`
+      : "Not set";
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-      <div className="flex items-start gap-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#baf4ea] hover:shadow-md">
+      <div className="flex items-start gap-3">
         <DoctorAvatar doctor={doctor} />
 
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-black text-slate-950">
+          <h3 className="truncate text-base font-black text-slate-950">
             {formatDoctorName(doctor.fullName || doctor.user?.name)}
           </h3>
-          <p className="mt-1 text-sm font-bold text-teal-700">
+          <p className="mt-0.5 truncate text-xs font-bold text-teal-700">
             {doctor.specialization || "Specialist"} · ৳{doctor.consultationFee || 0}
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">
             {doctor.user?.email || "No email"}
           </p>
         </div>
@@ -3130,33 +3244,33 @@ function DoctorCard({ doctor, compact = false, actionLoading = false, onViewDeta
 
       {!compact && (
         <>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
             <InfoBlock label="Department" value={doctor.department || "Not set"} />
-            <InfoBlock label="Experience" value={`${doctor.experienceYears || 0}+ years`} />
+            <InfoBlock label="Experience" value={experienceLabel} />
             <InfoBlock label="Qualification" value={doctor.qualification || "Not set"} />
             <InfoBlock label="Phone" value={doctor.phone || doctor.user?.phone || "N/A"} />
-            <InfoBlock label="Available Slots" value={slots.total} />
+            <InfoBlock label="Available Slots" value={`${slots.total || 0}`} />
             <InfoBlock label="Next Available" value={slots.next} />
           </div>
 
           {doctor.bio && (
-            <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+            <p className="mt-3 line-clamp-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-600">
               {doctor.bio}
             </p>
           )}
 
           {doctor.adminNote && (
-            <p className="mt-4 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold leading-6 text-teal-700">
+            <p className="mt-3 line-clamp-2 rounded-xl border border-teal-100 bg-teal-50 px-3 py-2 text-xs font-semibold leading-5 text-teal-700">
               {doctor.adminNote}
             </p>
           )}
         </>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {typeof onViewDetails === "function" && (
           <DoctorActionButton
-            icon={<Eye size={15} />}
+            icon={<Eye size={14} />}
             onClick={() => onViewDetails(doctor)}
           >
             View Details
@@ -3213,7 +3327,7 @@ function DoctorActionButton({ children, icon, tone = "white", disabled = false, 
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[0.72rem] font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
         tones[tone] || tones.white
       }`}
     >
@@ -3457,11 +3571,11 @@ function StatCard({ icon, label, value, tone = "slate" }) {
 
 function InfoBlock({ label, value }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
-      <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-slate-400">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+      <p className="text-[0.62rem] font-bold uppercase tracking-[0.13em] text-slate-400">
         {label}
       </p>
-      <p className="mt-1 break-words text-[0.86rem] font-bold text-slate-900">
+      <p className="mt-0.5 break-words text-[0.78rem] font-bold leading-5 text-slate-900">
         {value || "Not set"}
       </p>
     </div>
