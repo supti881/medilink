@@ -12,6 +12,7 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Star,
   Stethoscope,
   UsersRound,
@@ -87,7 +88,6 @@ function Doctors() {
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [bookingFeedback, setBookingFeedback] = useState("");
 
   const approvedDoctors = useMemo(() => {
     return doctors.filter(isDoctorVisibleForPatients);
@@ -198,44 +198,11 @@ function Doctors() {
     fetchDoctors();
   }, []);
 
-  useEffect(() => {
-    if (!bookingFeedback) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setBookingFeedback("");
-    }, 7000);
-
-    return () => window.clearTimeout(timer);
-  }, [bookingFeedback]);
-
-  const handleBookingSuccess = () => {
-    setBookDoctor(null);
-    setBookingFeedback(
-      "Appointment request submitted successfully. Please wait for doctor approval."
-    );
-  };
-
   return (
     <main className="min-h-screen bg-[#f3f6fa] text-slate-900">
       <style>{pageMotionStyles}</style>
 
-      {bookingFeedback && (
-        <div className="fixed left-1/2 top-5 z-[100] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-[#baf4ea] bg-white px-4 py-3 text-sm shadow-2xl shadow-slate-900/15">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#e6fbf7] text-[#0f766e]">
-              <CheckCircle2 size={18} />
-            </span>
-            <div className="min-w-0">
-              <p className="font-black text-slate-950">Appointment request submitted</p>
-              <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
-                {bookingFeedback}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <section className="relative overflow-hidden border-b border-white/10 bg-[#061817] px-4 py-8 text-white sm:px-6 lg:px-8 lg:py-9">
+      <section className="relative overflow-hidden border-b border-white/10 bg-[#061817] px-4 py-7 text-white sm:px-6 lg:px-8">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_16%,rgba(19,200,180,0.22),transparent_30%),radial-gradient(circle_at_88%_26%,rgba(45,212,191,0.13),transparent_34%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.11] [background-image:linear-gradient(to_right,rgba(255,255,255,0.18)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.14)_1px,transparent_1px)] [background-size:42px_42px]" />
 
@@ -247,11 +214,11 @@ function Doctors() {
                 Approved Care Network
               </div>
 
-              <h1 className="mt-3 max-w-3xl text-[1.85rem] font-bold leading-tight tracking-[-0.035em] text-white sm:text-[2.35rem] lg:text-[2.75rem]">
+              <h1 className="mt-3 max-w-2xl text-[1.65rem] font-bold leading-tight tracking-[-0.025em] text-white sm:text-[2rem]">
                 Find specialist doctors with verified appointment slots.
               </h1>
 
-              <p className="mt-2 max-w-2xl text-sm font-medium leading-7 text-slate-300">
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-300">
                 Discover admin-approved doctors, compare departments and fees,
                 then choose an available schedule that fits your care needs.
               </p>
@@ -279,7 +246,7 @@ function Doctors() {
                     <p className="text-[0.68rem] font-bold uppercase tracking-[0.13em] text-teal-200">
                       Live Doctor Directory
                     </p>
-                    <h2 className="mt-1 text-[1.35rem] font-bold leading-none text-white">
+                    <h2 className="mt-1 text-[1.2rem] font-bold leading-none text-white">
                       {approvedDoctors.length} Doctors
                     </h2>
                   </div>
@@ -374,6 +341,20 @@ function Doctors() {
         </div>
 
         <div className="medilink-reveal mx-auto mt-4 max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-4 py-3.5 text-center sm:px-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#baf4ea] bg-[#e6fbf7] px-3 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.13em] text-[#0f766e]">
+              <Sparkles size={13} />
+              Directory
+            </div>
+            <h2 className="mt-3 text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
+              Approved Doctor Directory
+            </h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              {filteredDoctors.length} doctor
+              {filteredDoctors.length === 1 ? "" : "s"} found
+            </p>
+          </div>
+
           <div className="p-4">
             {loading && (
               <div className="grid min-h-[240px] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
@@ -382,7 +363,7 @@ function Doctors() {
                     className="mx-auto animate-spin text-[#13c8b4]"
                     size={34}
                   />
-                  <p className="mt-4 text-sm font-semibold text-slate-700">
+                  <p className="mt-4 text-sm font-medium text-slate-700">
                     Loading approved doctors...
                   </p>
                 </div>
@@ -407,7 +388,7 @@ function Doctors() {
 
             {!loading && !error && filteredDoctors.length === 0 && (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-                <p className="text-base font-bold text-slate-900">
+                <p className="text-[0.98rem] font-bold text-slate-900">
                   No approved doctors found
                 </p>
                 <p className="mt-2 text-sm font-medium text-slate-600">
@@ -569,7 +550,7 @@ function Doctors() {
         doctor={bookDoctor}
         open={Boolean(bookDoctor)}
         onClose={() => setBookDoctor(null)}
-        onSuccess={handleBookingSuccess}
+        onSuccess={() => navigate("/patient-dashboard")}
       />
     </main>
   );
