@@ -90,15 +90,15 @@ function Login() {
         <div className="absolute bottom-[-16rem] left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-emerald-200/16 blur-3xl" />
       </div>
 
-      <section className="relative mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-5xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+      <section className="relative mx-auto flex max-w-5xl items-start justify-center px-4 pb-10 pt-8 sm:px-6 lg:px-8 lg:pb-12 lg:pt-9">
         <div className="w-full">
           <div className="mx-auto max-w-[29rem]">
 
-            <div className="mb-6 text-center">
+            <div className="mb-5 text-center">
               <h2 className="text-2xl font-black tracking-[-0.03em] text-slate-950 sm:text-3xl">
                 Sign in to MediLink
               </h2>
-              <p className="mx-auto mt-3 max-w-lg text-sm font-medium leading-6 text-slate-600">
+              <p className="mx-auto mt-2.5 max-w-lg text-sm font-medium leading-6 text-slate-600">
                 Continue to your dashboard and manage your healthcare workflow securely.
               </p>
             </div>

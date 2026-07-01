@@ -101,6 +101,33 @@ const processSteps = [
   },
 ];
 
+const dashboardPreviews = [
+  {
+    title: "Patient Dashboard",
+    role: "Patient Portal",
+    icon: <UsersRound size={20} />,
+    link: "/patient-dashboard",
+    text: "Patients can book appointments, track requests, view prescriptions, manage payments, and submit support tickets.",
+    points: ["Book appointment", "Prescription records", "Payment and support"],
+  },
+  {
+    title: "Doctor Dashboard",
+    role: "Doctor Portal",
+    icon: <Stethoscope size={20} />,
+    link: "/doctor-dashboard",
+    text: "Doctors can review patient bookings, manage consultation status, create prescriptions, and check payment records.",
+    points: ["Appointment queue", "Prescription builder", "Consultation status"],
+  },
+  {
+    title: "Admin Dashboard",
+    role: "Admin Control",
+    icon: <ShieldCheck size={20} />,
+    link: "/admin-dashboard",
+    text: "Admins can monitor doctors, patients, appointments, support tickets, and overall MediLink operations.",
+    points: ["Doctor approval", "Patient monitoring", "Support review"],
+  },
+];
+
 function Home() {
   return (
     <main className="overflow-hidden bg-[#f5f7fb] text-slate-950 selection:bg-emerald-500 selection:text-white">
@@ -148,6 +175,69 @@ function Home() {
                 </article>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-14 sm:py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-[0.68rem] font-extrabold uppercase tracking-[0.14em] text-emerald-600">
+              Dashboard Preview
+            </p>
+            <h2 className="mt-3 text-[1.55rem] font-extrabold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.85rem]">
+              Three role dashboards, one organized healthcare system.
+            </h2>
+            <p className="mt-3 text-sm font-medium leading-6 text-slate-600">
+              MediLink separates patient, doctor, and admin workflows so every user sees the right tools from one connected platform.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-4 lg:grid-cols-3">
+            {dashboardPreviews.map((dashboard) => (
+              <Link
+                key={dashboard.title}
+                to={dashboard.link}
+                className="group rounded-2xl border border-slate-200 bg-[#f8fbfd] p-4 shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white hover:shadow-[0_20px_44px_rgba(15,23,42,0.08)]"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#e6fbf7] text-[#0f766e] shadow-sm">
+                      {dashboard.icon}
+                    </span>
+                    <div>
+                      <p className="text-[0.68rem] font-extrabold uppercase tracking-[0.13em] text-emerald-600">
+                        {dashboard.role}
+                      </p>
+                      <h3 className="mt-1 text-[1rem] font-bold tracking-[-0.01em] text-slate-950">
+                        {dashboard.title}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <ArrowRight
+                    size={17}
+                    className="mt-2 text-slate-400 transition group-hover:translate-x-1 group-hover:text-[#0f766e]"
+                  />
+                </div>
+
+                <p className="mt-4 text-[0.8rem] font-medium leading-6 text-slate-600">
+                  {dashboard.text}
+                </p>
+
+                <div className="mt-4 grid gap-2">
+                  {dashboard.points.map((point) => (
+                    <div
+                      key={point}
+                      className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[0.75rem] font-bold text-slate-700"
+                    >
+                      <CheckCircle2 size={14} className="shrink-0 text-[#0f766e]" />
+                      {point}
+                    </div>
+                  ))}
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
