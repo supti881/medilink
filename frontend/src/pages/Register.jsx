@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import {
+  Activity,
+  ArrowRight,
+  BadgeCheck,
   CalendarDays,
   Camera,
   Droplets,
@@ -13,6 +16,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  ShieldCheck,
   User,
   UserRound,
   Users,
@@ -207,31 +211,44 @@ function Register() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f3f6fa] px-4 py-6 text-slate-900 sm:px-6 sm:py-8 lg:px-8">
-      <section className="mx-auto max-w-7xl">
+    <main className="relative overflow-hidden bg-slate-50 text-slate-950">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-[-16rem] top-[-13rem] h-[34rem] w-[34rem] rounded-full bg-[#13c8b4]/14 blur-3xl" />
+        <div className="absolute right-[-12rem] top-24 h-[32rem] w-[32rem] rounded-full bg-cyan-300/18 blur-3xl" />
+        <div className="absolute bottom-[-16rem] left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-emerald-200/16 blur-3xl" />
+      </div>
+
+      <section className="relative mx-auto max-w-5xl px-4 pb-10 pt-8 sm:px-6 lg:px-8 lg:pb-12 lg:pt-9">
         <div className="mx-auto max-w-3xl text-center">
-          <h1 className="text-[1.55rem] font-bold leading-tight tracking-[-0.025em] text-slate-950 sm:text-[1.9rem]">
+          <h1 className="text-2xl font-black leading-tight tracking-[-0.03em] text-slate-950 sm:text-3xl">
             Create your MediLink account
           </h1>
 
-          <p className="mx-auto mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600">
+          <p className="mx-auto mt-2.5 max-w-2xl text-sm font-medium leading-6 text-slate-600">
             Register once to access patient, doctor, appointment, prescription,
             payment, and support workflows from the correct portal.
           </p>
         </div>
 
-        <div className="mx-auto mt-6 max-w-3xl">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-4 py-3.5 sm:px-5">
-              <h2 className="text-[0.98rem] font-bold tracking-[-0.01em] text-slate-950">
-                Account Registration
-              </h2>
-              <p className="mt-1 text-sm font-medium text-slate-500">
-                Fill in the required details to create your secure account.
-              </p>
+        <div className="mx-auto mt-5 max-w-3xl">
+          <section className="overflow-hidden rounded-[1.55rem] border border-slate-200 bg-white shadow-xl shadow-slate-950/[0.07]">
+            <div className="border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div className="flex items-start gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e6fbf7] text-[#0f766e]">
+                  <Activity size={20} />
+                </div>
+                <div>
+                  <h2 className="text-base font-black text-slate-950">
+                    Account Registration
+                  </h2>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    Fill in the required details to create your secure account.
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="p-4 sm:p-5">
+            <div className="p-5 sm:p-6">
               <MessageStack error={error} success={success} devOtp={devOtp} />
 
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -394,24 +411,40 @@ function Register() {
                 <button
                   type="submit"
                   disabled={loading}
+                  className="group inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#13c8b4] px-5 text-sm font-black text-white shadow-lg shadow-teal-900/15 transition hover:-translate-y-0.5 hover:bg-[#0fb3a1] disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ color: "#ffffff" }}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#13c8b4] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#0fb3a1] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {loading && <Loader2 size={17} className="animate-spin" />}
-                  {loading ? "Creating account..." : "Create Account"}
+                  {loading ? (
+                    <>
+                      <Loader2 size={17} className="animate-spin" />
+                      Creating account...
+                    </>
+                  ) : (
+                    <>
+                      Create Account
+                      <ArrowRight
+                        size={17}
+                        className="transition group-hover:translate-x-0.5"
+                      />
+                    </>
+                  )}
                 </button>
               </form>
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-center">
-                <p className="text-sm font-medium text-slate-600">
-                  Already have an account?{" "}
-                  <Link
-                    to="/login"
-                    className="font-bold text-[#0f766e] transition hover:text-[#13c8b4]"
-                  >
-                    Sign in
-                  </Link>
-                </p>
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-slate-600">
+                Already have an account?{" "}
+                <Link
+                  to="/login"
+                  className="font-black text-[#0f766e] transition hover:text-[#13c8b4]"
+                >
+                  Sign in
+                </Link>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <MiniBadge icon={<BadgeCheck size={14} />} text="Secure" />
+                <MiniBadge icon={<ShieldCheck size={14} />} text="OTP Ready" />
+                <MiniBadge icon={<Activity size={14} />} text="Role Portal" />
               </div>
             </div>
           </section>
@@ -427,17 +460,17 @@ function MessageStack({ error, success, devOtp }) {
   return (
     <div className="mb-4 space-y-2">
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-semibold text-red-700">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
           {error}
         </div>
       )}
       {success && (
-        <div className="rounded-xl border border-[#baf4ea] bg-[#e6fbf7] px-3.5 py-2.5 text-sm font-semibold text-[#0f766e]">
+        <div className="rounded-2xl border border-[#baf4ea] bg-[#e6fbf7] px-4 py-3 text-sm font-bold leading-6 text-[#0f766e]">
           {success}
         </div>
       )}
       {devOtp && (
-        <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3.5 py-3 text-sm text-cyan-800">
+        <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
           <p className="font-bold">Demo OTP</p>
           <p className="mt-1 text-xl font-bold tracking-[0.22em]">{devOtp}</p>
           <Link to="/otp-verification" className="mt-2 inline-block font-bold text-cyan-700">
@@ -452,7 +485,7 @@ function MessageStack({ error, success, devOtp }) {
 function FormSection({ eyebrow, title, badge, soft = false, children }) {
   return (
     <section
-      className={`rounded-2xl border p-4 shadow-sm ${
+      className={`rounded-[1.25rem] border p-4 shadow-sm ${
         soft
           ? "border-[#baf4ea] bg-[#f4fffc]"
           : "border-slate-200 bg-white"
@@ -481,7 +514,7 @@ function FormSection({ eyebrow, title, badge, soft = false, children }) {
 function FieldShell({ label, optional = false, className = "", children }) {
   return (
     <div className={className}>
-      <label className="mb-1.5 block text-sm font-bold text-slate-700">
+      <label className="mb-2 block text-sm font-black text-slate-800">
         {label}
         {optional && (
           <span className="ml-2 text-xs font-semibold text-slate-400">Optional</span>
@@ -494,7 +527,7 @@ function FieldShell({ label, optional = false, className = "", children }) {
 
 function InputFrame({ icon, children }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 transition focus-within:border-[#13c8b4] focus-within:ring-4 focus-within:ring-[#e6fbf7]">
+    <div className="flex h-[52px] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 transition focus-within:border-[#13c8b4] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#13c8b4]/10">
       <span className="shrink-0 text-slate-400">{icon}</span>
       {children}
     </div>
@@ -511,7 +544,7 @@ function InputField({ label, type = "text", name, value, onChange, placeholder =
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+          className="h-12 w-full min-w-0 bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
         />
       </InputFrame>
     </FieldShell>
@@ -528,7 +561,7 @@ function PasswordField({ value, onChange, showPassword, onToggle }) {
           value={value}
           onChange={onChange}
           placeholder="Minimum 6 characters"
-          className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+          className="h-12 w-full min-w-0 bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
         />
         <button
           type="button"
@@ -551,7 +584,7 @@ function SelectField({ label, name, value, onChange, options, icon, className = 
           name={name}
           value={value}
           onChange={onChange}
-          className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-700 outline-none"
+          className="h-12 w-full min-w-0 bg-transparent text-sm font-semibold text-slate-900 outline-none"
         >
           {options.map((option) => (
             <option key={option.value || option.label} value={option.value}>
@@ -567,7 +600,7 @@ function SelectField({ label, name, value, onChange, options, icon, className = 
 function TextAreaField({ label, optional = false, name, value, onChange, placeholder = "", rows = 3, icon, className = "" }) {
   return (
     <FieldShell label={label} optional={optional} className={className}>
-      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 transition focus-within:border-[#13c8b4] focus-within:ring-4 focus-within:ring-[#e6fbf7]">
+      <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition focus-within:border-[#13c8b4] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#13c8b4]/10">
         <span className="mt-0.5 shrink-0 text-slate-400">{icon}</span>
         <textarea
           name={name}
@@ -575,7 +608,7 @@ function TextAreaField({ label, optional = false, name, value, onChange, placeho
           onChange={onChange}
           rows={rows}
           placeholder={placeholder}
-          className="w-full min-w-0 resize-none bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+          className="w-full min-w-0 resize-none bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
         />
       </div>
     </FieldShell>
@@ -585,7 +618,7 @@ function TextAreaField({ label, optional = false, name, value, onChange, placeho
 function PhotoSection({ profileImagePreview, profileImageFile, onPhotoChange, onRemove }) {
   return (
     <FormSection eyebrow="Profile Photo" title="Optional image upload" badge="Optional">
-      <div className="flex flex-col gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3.5 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 sm:flex-row sm:items-center">
         <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm">
           {profileImagePreview ? (
             <img src={profileImagePreview} alt="Profile preview" className="h-full w-full object-cover" />
@@ -595,7 +628,7 @@ function PhotoSection({ profileImagePreview, profileImageFile, onPhotoChange, on
         </div>
 
         <div className="min-w-0 flex-1">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-950 px-3.5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800">
             <Camera size={16} />
             Choose Photo
             <input type="file" accept="image/*" onChange={onPhotoChange} className="hidden" />
@@ -617,6 +650,15 @@ function PhotoSection({ profileImagePreview, profileImageFile, onPhotoChange, on
         </div>
       </div>
     </FormSection>
+  );
+}
+
+function MiniBadge({ icon, text }) {
+  return (
+    <span className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#e6fbf7] px-3 py-2 text-xs font-black text-[#0f766e]">
+      {icon}
+      {text}
+    </span>
   );
 }
 
